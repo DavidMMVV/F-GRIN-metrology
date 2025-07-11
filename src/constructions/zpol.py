@@ -11,7 +11,7 @@ def rad_poly(m: int,
     Args:
         m (int): Column index of the Zernike polynomial. Must be lower or equal to n.
         n (int): Row index of the Zernike polynomial.
-        rho (torch.Tensor): Radial coordinates defined between 0 and 1
+        rho (torch.Tensor): Radial coordinates defined between 0 and 1.
 
     Returns:
         Rmn (torch.Tensor): Computed radial Zernike polynomial.
@@ -82,18 +82,6 @@ def ANSI_to_mn(index: int) -> tuple[int, int]:
     n = int(n_raw)
     m_raw = (n_raw * (n_raw + 1) / 2) - (n * (n+1) / 2)
     m = -n + 2 * int(m_raw)
-    #m = 0
-    #n = 0
-#
-    #if index != 0:
-    #    reg = 0 + index
-    #    for i in range(index+1):
-    #        reg -= (i + 1)
-    #        if reg < 0:
-    #            n = i
-    #            m_raw = reg + (i + 1)
-    #            m = -i + 2 * m_raw
-    #            break
     return m, n
 
 if __name__ == "__main__":
@@ -104,7 +92,7 @@ if __name__ == "__main__":
     from config import LOCAL_DATA_DIR
 
     H, W = (256,256)
-    vcoma_params = {"7": 1} 
+    vcoma_params = {"6": 1} 
     data_dir = LOCAL_DATA_DIR / "zernike"
     data_dir.mkdir(parents=True, exist_ok=True)
     file_path = get_file_route(data_dir, "vert_zernike.json")
@@ -112,4 +100,3 @@ if __name__ == "__main__":
     
     coma = z_poly(vcoma_params, H=H, W=W)
     show_image(coma)
-

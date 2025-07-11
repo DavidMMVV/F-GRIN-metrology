@@ -13,16 +13,27 @@ def show_image(image: list | tuple | np.ndarray | torch.Tensor,
     figparams = figparams or {}
     imparams = imparams or {}
     
-
     array_image = to_array(image)
     plt.figure(**figparams)
     plt.imshow(array_image, **imparams)
+    plt.tight_layout()
     plt.show()
     if savefigparams is not None:
         plt.savefig(**savefigparams)
 
-
-
+def show_complex(image: list | tuple | np.ndarray | torch.Tensor,
+                 savefigparams: Optional[dict[str, Any]] = None):
+    
+    array_image = to_array(image)
+    fig, sub = plt.subplots(1,2)
+    sub[0].imshow(np.abs(array_image))
+    sub[0].set_title("Module")
+    sub[1].imshow(np.angle(array_image))
+    sub[1].set_title("Phase")
+    plt.tight_layout()
+    plt.show()
+    if savefigparams is not None:
+        plt.savefig(**savefigparams)
 
 def to_array(image: list | tuple | np.ndarray | torch.Tensor):
     if isinstance(image, list | tuple):
