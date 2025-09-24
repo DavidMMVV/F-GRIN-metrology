@@ -1,4 +1,3 @@
-
 import torch
 import pytest
 
@@ -10,8 +9,8 @@ from fgrinmet.globvar import DEVICE
 from config import LOCAL_DATA_DIR
 
 @pytest.mark.parametrize("w_params", [
-    {"7": 1},
-    {"1": 1, "2": 1, "3": 1, "4": 1},
+    {"7": 1.},
+    {"1": 1., "2": 1., "3": 1., "4": 1.},
 ])
 def test_rw_json(w_params):
     LOCAL_DATA_DIR.mkdir(parents=True, exist_ok=True)

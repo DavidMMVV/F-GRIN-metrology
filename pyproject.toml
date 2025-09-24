@@ -10,7 +10,7 @@ authors = [
     { name = "David", email = "dmorenovazrome@tudelft.nl" }
 ]
 readme = "README.md"
-requires-python = ">=3.13.5"
+requires-python = ">=3.13"
 keywords = ["metrology", "F-GRIN", "python"]
 
 [tool.setuptools.packages.find]

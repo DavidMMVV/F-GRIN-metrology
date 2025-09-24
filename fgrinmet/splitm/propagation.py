@@ -37,19 +37,22 @@ def propagate_paraxial(
     tshape = list(shape[is_taxes])
     Nz = shape[axis]
 
-    Fy, Fx = fft_coord_pytorch(tshape, pix_size, dtype, device)
+    tpix_size = [pix_size[i] for i in range(len(shape)) if is_taxes[i]] if isinstance(pix_size, list | tuple) else pix_size
+    Fy, Fx = fft_coord_pytorch(tshape, tpix_size, dtype, device) 
     dz = float(pix_size[axis]) if isinstance(pix_size, list | tuple) else pix_size
     
-    # Compute the free space paraxial propagator
-    C = 1j*torch.pi * wavelength * dz / (2 * na)
-    parax_prop = torch.exp(C * (Fx**2 + Fy**2))
+    parax_prop = torch.exp((1j * torch.pi * wavelength * dz / (2 * na)) * (Fx**2 + Fy**2))
 
     # Compute the propagation
     Uo = Ui.clone()
     for i in range(Nz):
-        Uo = iFT2(parax_prop * FT2(torch.exp(-2*C*(n_vol[i]**2-na**2)) * iFT2(FT2(Uo))))
+        Uo = iFT2(parax_prop * FT2(torch.exp((1j * torch.pi * dz /(na * wavelength))*(na**2-n_vol[i]**2)) *
+                                    iFT2(parax_prop * FT2(Uo))))
 
     return Uo
+
+def retrieve_in():
+    ...
 
 def propagate_paraxial_jit(
         Ui: torch.Tensor,
@@ -103,6 +106,6 @@ def propagate_paraxial_jit(
     # Compute the propagation
     Uo = Ui.clone()
     for i in range(Nz):
-        Uo = iFT2(parax_prop * FT2(torch.exp(-2*C*(n_vol[i]**2-na**2)) * iFT2(FT2(Uo))))
+        Uo = iFT2(parax_prop * FT2(torch.exp(2*C*(n_vol[i]**2-na**2)) * iFT2(FT2(Uo))))
 
     return Uo

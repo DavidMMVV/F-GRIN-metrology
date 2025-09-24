@@ -1,9 +1,8 @@
 from tkinter import NO
-import skfmm
+import skfmm # type: ignore
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
-from constructions import zpol
 from fgrinmet.constructions.zpol import z_poly
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import os
@@ -32,7 +31,7 @@ height, width = 3507, 2481
 # create figure with the right pixel resolution
 dpi = 100
 fig = plt.figure(figsize=(width / dpi, height / dpi), dpi=dpi)
-ax = fig.add_axes([0, 0, 1, 1])  # full canvas, no margins
+ax = fig.add_axes([0, 0, 1, 1])  # type: ignore # full canvas, no margins
 
 # plot colormap
 ax.imshow(1/n, cmap="magma", origin="lower")
