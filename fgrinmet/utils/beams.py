@@ -88,9 +88,6 @@ class GaussianBeamR(Beam):
 def float_to_complex_dtype(dtype: torch.dtype) -> torch.dtype:
     """
     Convert a PyTorch real dtype to the corresponding complex dtype.
-    
-    float32 -> complex64
-    float64 -> complex128
     """
     if dtype == torch.float32:
         return torch.complex64

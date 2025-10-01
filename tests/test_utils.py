@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fgrinmet.utils.coordinates import *
 from fgrinmet.utils.io_data import *
-from fgrinmet.globvar import DEVICE
+from fgrinmet.globvar import DEVICE_TORCH
 from config import LOCAL_DATA_DIR
 
 @pytest.mark.parametrize("w_params", [
@@ -28,7 +28,7 @@ def test_rw_json(w_params):
     ((4, 6), (1.0, 2.0)),
 ])
 def test_coord_pytorch_shape_and_dtype(shape, pix_size):
-    Xi = coord_pytorch(shape, pix_size, dtype=torch.float32, device=DEVICE)
+    Xi = coord_pytorch(shape, pix_size, dtype=torch.float32, device=DEVICE_TORCH)
 
     assert isinstance(Xi, tuple)
     assert len(Xi) == len(shape)
@@ -37,7 +37,7 @@ def test_coord_pytorch_shape_and_dtype(shape, pix_size):
         assert isinstance(x, torch.Tensor)
         assert x.shape == tuple(shape)
         assert x.dtype == torch.float32
-        assert x.device.type == DEVICE.type
+        assert x.device.type == DEVICE_TORCH.type
 
         mid_val = x[tuple(s // 2 for s in shape)]
         assert torch.isclose(mid_val, torch.tensor(0.0, dtype=torch.float32, device=x.device))
@@ -51,7 +51,7 @@ def test_coord_pytorch_shape_and_dtype(shape, pix_size):
     ((4, 6, 9), (1.0, 2.0, 3.0))
 ])
 def test_fft_coord_pytorch_matches_fftfreq(shape, pix_size):
-    Fi = fft_coord_pytorch(shape, pix_size, dtype=torch.float64, device=DEVICE)
+    Fi = fft_coord_pytorch(shape, pix_size, dtype=torch.float64, device=DEVICE_TORCH)
 
     assert isinstance(Fi, tuple)
     assert len(Fi) == len(shape)
@@ -60,7 +60,7 @@ def test_fft_coord_pytorch_matches_fftfreq(shape, pix_size):
         assert isinstance(f, torch.Tensor)
         assert f.shape == tuple(shape)
         assert f.dtype == torch.float64
-        assert f.device.type == DEVICE.type
+        assert f.device.type == DEVICE_TORCH.type
 
         expected = torch.fft.fftshift(
             torch.fft.fftfreq(shape[i], d=(pix_size[i] if isinstance(pix_size, tuple) else pix_size),
@@ -77,8 +77,8 @@ def test_fft_coord_pytorch_matches_fftfreq(shape, pix_size):
     ((8,), 0.5)
 ])
 def test_coord_and_fft_consistency(shape, pix_size):
-    Xi = coord_pytorch(shape, pix_size, dtype=torch.float64, device=DEVICE)
-    Fi = fft_coord_pytorch(shape, pix_size, dtype=torch.float64, device=DEVICE)
+    Xi = coord_pytorch(shape, pix_size, dtype=torch.float64, device=DEVICE_TORCH)
+    Fi = fft_coord_pytorch(shape, pix_size, dtype=torch.float64, device=DEVICE_TORCH)
 
     x = Xi[0][:,]
     f = Fi[0][:,]

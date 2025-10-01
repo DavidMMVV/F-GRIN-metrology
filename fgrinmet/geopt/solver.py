@@ -7,8 +7,7 @@ from typing import Optional, Tuple
 
 
 def eikonal_solver():
-    
-
+    pass
 
 def solver_2nd_order_eikonal():
     pass

@@ -27,6 +27,7 @@ def project_3d(volume, angle):
     # Rotar el volumen en el eje Z
     grid = create_rotation_grid(volume.shape[-3:], angle)
     rotated = F.grid_sample(volume, grid, mode='bilinear', padding_mode='zeros', align_corners=True)
+    print(rotated.shape, grid.shape, volume.shape)
     
     # Sumar sobre eje Z para simular proyección
     projection = rotated.sum(dim=2)
