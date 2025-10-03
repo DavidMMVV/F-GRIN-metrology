@@ -1,94 +1,63 @@
-import time
+import jax
+import jax.numpy as jnp
 import numpy as np
 
-# ============================================================
-# Configuración
-# ============================================================
-np.random.seed(0)
-N = 512  # tamaño del cubo
-K = 5   # tamaño del kernel
-x = np.random.rand(N, N, N).astype(np.float32)
-kernel = np.random.rand(K, K, K).astype(np.float32)
+# enable float64 in JAX
+jax.config.update("jax_enable_x64", True)
 
-# ============================================================
-# Numba
-# ============================================================
-from numba import njit, prange
+b_0 = np.array([1.0, 2.0, 3.0], dtype=jnp.complex128)
+a = jnp.arange(9, dtype=jnp.float64).reshape((3, 3))
+b = np.array([4.0+1j, 5.0+3j, 6.0+3j], dtype=jnp.complex128)
 
-@njit(parallel=True, fastmath=True)
-def conv3d_numba(x, k):
-    nx, ny, nz = x.shape
-    kk = k.shape[0]
-    outx, outy, outz = nx-kk+1, ny-kk+1, nz-kk+1
-    out = np.zeros((outx,outy,outz), dtype=np.float32)
-    for i in prange(outx):
-        for j in range(outy):
-            for l in range(outz):
-                acc = 0.0
-                for ii in range(kk):
-                    for jj in range(kk):
-                        for ll in range(kk):
-                            acc += x[i+ii,j+jj,l+ll] * k[ii,jj,ll]
-                out[i,j,l] = acc
-    return out
+def f(b0, b, pos):
+    a = jnp.arange(9, dtype=jnp.complex128).reshape((3, 3))
+    a = jnp.exp(1j * (jnp.pi/2) * a.at[pos].set(b0))
+    return (b @ a).sum()
 
-# ============================================================
-# JAX
-# ============================================================
+def f_hand(b0, b, pos):
+    a = jnp.arange(len(b_0)*len(b), dtype=jnp.complex128).reshape((len(b_0), len(b)))
+    for i in range(len(b_0)):
+        a = a.at[pos, i].set(jnp.exp(1j * (jnp.pi/2) * b0[i]))
+    
+    return (b @ a).sum()
+def f_cond(b0, b, mask):
+    a = jnp.arange(len(b_0)*len(b), dtype=jnp.complex128).reshape((len(b_0), len(b)))
+    a = jnp.where(mask, jnp.exp(1j * (jnp.pi/2) * b0).reshape(-1,1), a)
+    return (b @ a).sum()
+
+print(jax.make_jaxpr(f)(b_0, b, 1))
+print(jax.value_and_grad(f, argnums=0, holomorphic=True)(b_0, b,1))
+b_0 = np.array([1.0, 2.0, 3.0], dtype=jnp.complex128)
+b = np.array([4.0+1j, 5.0+3j, 6.0+3j], dtype=jnp.complex128)
+print(jax.value_and_grad(f_hand, argnums=0, holomorphic=True)(b_0, b, 1))
+b_0 = np.array([1.0, 2.0, 3.0], dtype=jnp.complex128)
+print(jax.value_and_grad(f_cond, argnums=0, holomorphic=True)(b_0, b, 1))
+
+print(a[20])
+
 import jax
 import jax.numpy as jnp
 
-def conv3d_jax(x, k):
-    x = jnp.array(x)
-    k = jnp.array(k)
-    return jax.lax.conv_general_dilated(
-        x[None, None, :, :, :],   # [batch, in_channels, D,H,W]
-        k[None, None, :, :, :],   # [out_channels, in_channels, kd,kh,kw]
-        (1,1,1),                  # stride
-        "VALID"
-    )
+def f_scan(carry, z):
+    u0, a, b = carry
+    uf = a * z + b * u0
+    new_carry = (uf, a, b)
+    return new_carry, None  # no guardamos ningún valor intermedio
 
-# ============================================================
-# PyTorch
-# ============================================================
-import torch
-import torch.nn.functional as F
+u0 = 0
+a = 1
+b = 2
+carry_init = (u0, a, b)
 
-def conv3d_torch(x, k, device="cpu"):
-    xt = torch.tensor(x, device=device).unsqueeze(0).unsqueeze(0)
-    kt = torch.tensor(k, device=device).unsqueeze(0).unsqueeze(0)
-    return F.conv3d(xt, kt).squeeze()
+final_carry, _ = jax.lax.scan(f_scan, carry_init, jnp.arange(10))
 
-# ============================================================
-# Benchmark Helper
-# ============================================================
-def benchmark(func, *args, repeat=5, warmup=True, warmup_runs=1):
-    if warmup:
-        for _ in range(warmup_runs):
-            func(*args)
-    times = []
-    for _ in range(repeat):
-        t0 = time.time()
-        func(*args)
-        t1 = time.time()
-        times.append(t1 - t0)
-    return np.mean(times), np.std(times)
+print("final_carry:", final_carry)
 
-# ============================================================
-# Ejecución
-# ============================================================
-print("Benchmark convolución 3D ({}^3 tensor, kernel {}^3):".format(N,K))
 
-# Numba
-mean, std = benchmark(conv3d_numba, x, kernel)
-print(f"Numba:   {mean:.4f} ± {std:.4f} s")
+bo = jnp.array([[[True, False, True],
+           [False, True, False],
+           [True, False, True]], [[True, False, True],
+           [False, True, False],
+           [True, False, True]]])
 
-# JAX
-conv3d_jit = jax.jit(conv3d_jax)
-mean, std = benchmark(conv3d_jit, x, kernel, warmup_runs=5)
-print(f"JAX (CPU/GPU): {mean:.4f} ± {std:.4f} s")
-
-# Torch
-device = "cuda" if torch.cuda.is_available() else "cpu"
-mean, std = benchmark(lambda a,b: conv3d_torch(a,b,device), x, kernel)
-print(f"Torch ({device}): {mean:.4f} ± {std:.4f} s")
+print(bo.prod(axis=1).astype(bool))

@@ -41,7 +41,7 @@ if __name__ == "__main__":
     # Simulation parameters
     sim_shape = (2048, 600, 600) #512, 512)
     wavelength = 532e-9
-    tpix_size = 250e-9 / wavelength
+    tpix_size = 150e-9 / wavelength
     dz = 25e-9 / wavelength
     pix_size = (dz, tpix_size, tpix_size)
     na = 1.5
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     fig, sub = plt.subplots(2, 2, figsize=(15, 10))
     im1 = sub[0, 0].imshow(n_vol[n_vol.shape[0]//2].cpu().numpy(), cmap='jet', extent=extent)
     plt.colorbar(im1, ax=sub[0, 0])
-    im2 = sub[0, 1].plot(torch.arange(sim_shape[0])*dz, L_mod.cpu().numpy(), label="$sum(|U|^2)$")
+    im2 = sub[0, 1].plot(torch.arange(sim_shape[0])*dz, L_mod.cpu().numpy(), label="$\\int|U|^2 dS$")
     sub[0, 1].legend()
     im3 = sub[1, 0].imshow(Uo.abs().cpu().numpy(), cmap='jet', extent=extent)
     plt.colorbar(im3, ax=sub[1, 0])

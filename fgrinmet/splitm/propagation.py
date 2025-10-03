@@ -97,7 +97,7 @@ def propagate_paraxial_sta_check(
     for i in range(Nz):
         Uo = iFT2(parax_prop * FT2(torch.exp((1j * torch.pi * dz /(na * wavelength))*(na**2-n_vol[i]**2)) *
                                     iFT2(parax_prop * FT2(Uo))))
-        L_mod[i] = (Uo.abs()**2).sum() - mod_0
+        L_mod[i] = ((Uo.abs()**2).sum() - mod_0) * (tpix_size**2 if isinstance(tpix_size, (int, float)) else float(np.prod(tpix_size)))
         
     return Uo, L_mod
 
