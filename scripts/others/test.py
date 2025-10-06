@@ -61,3 +61,10 @@ bo = jnp.array([[[True, False, True],
            [True, False, True]]])
 
 print(bo.prod(axis=1).astype(bool))
+
+try: jax_device = jax.devices("tpu") 
+except: 
+    try: jax_device = jax.devices("gpu")
+    except: jax_device = jax.devices("cpu")
+
+print(jax_device)

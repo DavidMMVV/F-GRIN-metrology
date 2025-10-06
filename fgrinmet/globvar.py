@@ -9,7 +9,7 @@ DEVICE_TORCH = (
 )
 
 # JAX device 
-try:
-    DEVICE_JAX = jax.devices("gpu")[0]
-except RuntimeError:
-    DEVICE_JAX = jax.devices("cpu")[0]
+try: DEVICE_JAX = jax.devices("tpu")[0]
+except: 
+    try: DEVICE_JAX = jax.devices("gpu")[0]
+    except: DEVICE_JAX = jax.devices("cpu")[0]

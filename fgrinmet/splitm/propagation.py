@@ -1,10 +1,97 @@
 import torch
 import numpy as np
+import jax.numpy as jnp
 
-from typing import List, Tuple, Union
+from typing import List, Tuple, Optional
 
-from fgrinmet.globvar import DEVICE_TORCH
-from fgrinmet.utils import coord_pytorch, fft_coord_pytorch, FT2, iFT2
+from ..utils import coord_jax, fft_coord_jax, coord_pytorch, fft_coord_pytorch, FT2, iFT2
+from .interpolation import trilinear_interpolate
+
+# TODO: Implement in jax
+def propagate_paraxial_jax(
+        Ui: jnp.ndarray, 
+        n_vol: jnp.ndarray,
+        mask: Optional[jnp.ndarray] = None,
+        prop_pix_size: float | List[float] | Tuple[float,...] = 1.0,
+        obj_pix_size: float | List[float] | Tuple[float,...] = 1.0,
+        na: float = 1.5,
+        wavelength: float = 645e-9
+        ) -> jnp.ndarray:
+    """Propagate a beam over a rectangular prism volume considering paraxial aproximation. the axis along which the field is propagatd is the first (axis=0).
+
+    Args:
+        Ui (jnp.ndarray): Input field with dimensions of the transversal plane in the media. 2D tensor with shape (Hg, Wg).
+        n_vol(jnp.ndarray): Distribution of the index of refraction. 3D tensor with shape (Do, Ho, Wo).
+        mask (Optional[jnp.ndarray], optional): A mask to specify valid points with shape (Do, Ho, Wo) which fulfills that N = mask.sum(). Defaults to None.
+        prop_pix_size(jnp.ndarray): Pixel size of the propagation grid. Defaults to 1.0.
+        obj_pix_size(jnp.ndarray): Pixel size of the object. Defaults to 1.0.
+        na (float, optional): Average index of refraction. Defaults to 1.5.
+        wavelength (float, optional): Wavelength of the light in the vacuum. Defaults to 645e-9.
+
+    Returns:
+        Uo(jnp.ndarray): Output field.
+    """
+
+    shape_obj = tuple(n_vol.shape)
+    t_obj_pix_size = obj_pix_size[1:] if isinstance(obj_pix_size, list | tuple) else obj_pix_size
+    t_prop_pix_size = prop_pix_size[1:] if isinstance(prop_pix_size, list | tuple) else prop_pix_size
+    dz = prop_pix_size[0] if isinstance(prop_pix_size, list | tuple) else prop_pix_size
+
+    Fy, Fx = fft_coord_jax(shape_obj[1:], t_obj_pix_size)
+    coord_plane = coord_jax((1, ), )
+
+    prop_fact = paraxial_propagator_jax(Fy, Fx, dz, na, wavelength)
+
+    
+    #trilinear_interpolate(plane_coords, n_vol, na, mask)
+
+    return jnp.ones_like(Ui)
+
+def paraxial_propagator_jax(
+        Fy: jnp.ndarray,
+        Fx: jnp.ndarray,
+        dz: float = 1.0,
+        na: float = 1.5,
+        wavelength: float = 645e-9
+    ) -> jnp.ndarray:
+    """Computes the propagation term in free space considering paraxial approximation.
+
+    Args:
+        Fy (jnp.ndarray): Fourier frequency coordinate in Y direction.
+        Fx (jnp.ndarray): Fourier frequency coordinate in X direction.
+        dz (float, optional): Step length. Defaults to 1.0.
+        na (float, optional): Average index of refraction of the media. Defaults to 1.5.
+        wavelength (float, optional): Wavelength of the light in vacuum. Defaults to 645e-9.
+
+    Returns:
+        jnp.ndarray: _description_
+    """
+    return jnp.exp((1j * torch.pi * wavelength * dz / (2 * na)) * (Fx**2 + Fy**2))
+
+def paraxial_propagation_step_jax(
+        Ui: jnp.ndarray,
+        n_plane: jnp.ndarray,
+        prop_factor: jnp.ndarray,
+        dz: float = 1.0,
+        na: float = 1.5,
+        wavelength: float = 645e-9
+    ) -> jnp.ndarray:
+    """Computes a single propagaion step in paraxial approximation.
+
+    Args:
+        Ui (jnp.ndarray): Input field with dimensions of the transversal plane in the media. 2D tensor with shape (Hg, Wg).
+        n_plane(jnp.ndarray): Values of the index of refraction in the slice.
+        prop_factor (jnp.ndarray): Free space propagation factor.
+        dz (float, optional): Step length. Defaults to 1.0.
+        na (float, optional): Average index of refraction of the media. Defaults to 1.5.
+        wavelength (float, optional): Wavelength of the light in vacuum. Defaults to 645e-9.
+
+    Returns:
+        Uo(jnp.ndarray): Output field from the slice.
+    """
+
+    return iFT2(prop_factor * FT2(jnp.exp((1j * torch.pi * dz /(na * wavelength))*(na**2-n_plane**2)) *
+                            iFT2(prop_factor * FT2(Ui))))
 
 def propagate_paraxial(
         Ui: torch.Tensor,  # 2D tensor with shape (H, W) 
@@ -24,7 +111,6 @@ def propagate_paraxial(
         axis (int, optional): Axis along which the propagation is performed. Defaults to 0
         na (float, optional): Average index of refraction of the media. Defaults to 1.5.
         wavelength (float, optional): Wavelength of the light. Defaults to 1.0.
-9.
     Returns:
         Uo(torch.Tensor): Output field. 
     """
@@ -50,10 +136,6 @@ def propagate_paraxial(
 
     return Uo
 
-# TODO: Implement in jax
-def propagate_paraxialjax():
-    pass
-
 def propagate_paraxial_sta_check(
         Ui: torch.Tensor,  # 2D tensor with shape (H, W) 
         n_vol: torch.Tensor, # 3D tensor with shape (D, H, W) 
@@ -62,7 +144,7 @@ def propagate_paraxial_sta_check(
         na: float = 1.5,
         wavelength: float = 645e-9
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Propagates a beam over a square prism volume considering paraxial approximation.
+    """Propagates a beam over a rectangular prism volume considering paraxial approximation.
 
     Args:
         Ui (torch.Tensor): Input field with dimensions of the transversal plane in the media.

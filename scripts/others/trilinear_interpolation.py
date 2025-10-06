@@ -3,10 +3,9 @@ import time
 import jax
 import jax.numpy as jnp
 from fgrinmet.splitm import rotation_matrix
-from tqdm import tqdm
+from tqdm import tqdm # type: ignore
 
 from typing import Optional
-from functools import partial
 
 def trilinear_interpolation(
         points: jnp.ndarray,
@@ -45,18 +44,19 @@ def trilinear_interpolation(
                          [1,1,0],
                          [1,1,1]], dtype=jnp.int32)
     
+    # Compute the floor and the decimal factor dependent on distance of the triliniar expresion
     floor_points = jnp.floor(points).astype(jnp.int32)
-    dec_points = (offsets[::-1, :, *dim_exp] + (-1)**(offsets[::-1, :, *dim_exp]) * (points - floor_points)[None]).prod(axis=1) # Obtain the factor dependent on distance of the triliniar expresion
+    dec_fact = (offsets[::-1, :, *dim_exp] + (-1)**(offsets[::-1, :, *dim_exp]) * (points - floor_points)[None]).prod(axis=1)
 
+    # Compute the values in the corners
     corners = floor_points[None] + offsets[:, :, *dim_exp]
     condition = (((corners >= 0).prod(axis=1).astype(bool)) &
                  ((corners < grid_shape[None, :, *dim_exp]).prod(axis=1).astype(bool)) & 
                  (mask[corners[:,0], corners[:,1], corners[:,2]]))
     corners_val = jnp.where(condition, values_grid[corners[:,0], corners[:,1], corners[:,2]], outside)
 
-    c = (corners_val * dec_points).sum(axis=0)
-
-    # apply outside only once
+    # Find the interpolated values
+    c = (corners_val * dec_fact).sum(axis=0)
     return c
 
 def compute_planes_scan(Zpg0, Ypg0, Xpg0, n_vec, n, n_a, num_planes):
@@ -75,12 +75,12 @@ def compute_planes_scan(Zpg0, Ypg0, Xpg0, n_vec, n, n_a, num_planes):
 
 if __name__ == "__main__":
     # Define object parameters
-    shape_obj = (64, 64, 64)
-    pix_size_object = 1
+    shape_obj = (512, 512, 512)
+    pix_size_object = 0.5
     center = (0.0, 0.0, 0.0)
-    radius = 30.0
+    radius = 50.0
     Lzo, Lyo, Lxo = (shape_obj[0] * pix_size_object, shape_obj[1] * pix_size_object, shape_obj[2] * pix_size_object)
-    w = 30.0
+    w = 50.0
     n_a = 1.5
     
     # Create the object
@@ -89,13 +89,15 @@ if __name__ == "__main__":
         (jnp.arange(shape_obj[1]) - shape_obj[1] / 2) * pix_size_object + center[1],
         (jnp.arange(shape_obj[2]) - shape_obj[2] / 2) * pix_size_object + center[2],
         indexing="ij")
-    R = jnp.sqrt(Xo**2 + Yo**2 + Zo**2)
+    
+    with jax.default_device(jax.devices("cpu")[0]):
+        R = jnp.sqrt(Xo**2 + Yo**2 + Zo**2)
     n = n_a + 0.5 * (jnp.exp(-R**2/(w**2)) - jnp.exp(-radius**2/(w**2))) * (R <= radius)
 
     # Define grid parameters
-    shape_grid = (1024, 1024, 1024)
+    shape_grid = (1024*32, 1024, 1024)
     pix_size_plane = 0.125
-    hz = 0.125
+    hz = 0.125/32
     vec_plane = (0, 0, jnp.pi / 4)  # normal vector of the plane
     rot_m = rotation_matrix(*vec_plane)
 
@@ -140,10 +142,11 @@ if __name__ == "__main__":
         #loss = jnp.sum((n_plane - target_plane)**2)
         #grad_n = jax.grad(lambda n_values: jnp.sum((trilinear_interpolation_jit(cord_in, n_values, outside=n_a) - target_plane)**2))(n)
 
-        if i == shape_grid[0] // 3:
+        if i == (shape_grid[0] // 2):
             import matplotlib.pyplot as plt
             plt.imshow(n_plane, cmap='jet')
             plt.colorbar()
-            plt.title("Refractive index at the center plane")
+            plt.title(f"Refractive index at the center plane $z_g$={(i*hz)}$\\lambda$")
 
-    plt.show()
+    plt.show() # type: ignore
+    print("hey")

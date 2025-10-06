@@ -28,7 +28,7 @@ def iFT2(x: np.ndarray) -> np.ndarray: ...
 def iFT2(x: torch.Tensor) -> torch.Tensor: ...
 def iFT2(x):
     if isinstance(x, jnp.ndarray):
-        return np.fft.ifft2(np.fft.ifftshift(x))
+        return jnp.fft.ifft2(jnp.fft.ifftshift(x))
     elif isinstance(x, torch.Tensor):
         return torch.fft.ifft2(torch.fft.ifftshift(x))
     elif isinstance(x, np.ndarray):

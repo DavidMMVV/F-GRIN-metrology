@@ -9,7 +9,6 @@ from fgrinmet.globvar import DEVICE_TORCH
 def coord_jax(
         shape: List[int] | Tuple[int,...],
         pix_size: float | list[float] | Tuple[float,...],
-        device: jax.Device,
 ) -> tuple[jnp.ndarray, ...]:
     """Generates the grid with coordinates for real space as a jax array.
 
