@@ -9,11 +9,14 @@ from .interpolation import trilinear_interpolate
 
 # TODO: Implement in jax
 def propagate_paraxial_jax(
-        Ui: jnp.ndarray, 
-        n_vol: jnp.ndarray,
+        Ui: jnp.ndarray,
+        n_vals: jnp.ndarray,
+        prop_shape: List[int] | Tuple[int,int,int],
+        obj_shape: List[int] | Tuple[int,int,int],
+        init_plane_coord: jnp.ndarray,
         mask: Optional[jnp.ndarray] = None,
-        prop_pix_size: float | List[float] | Tuple[float,...] = 1.0,
-        obj_pix_size: float | List[float] | Tuple[float,...] = 1.0,
+        prop_pix_size: float | List[float] | Tuple[float,float,float] = 1.0,
+        obj_pix_size: float | List[float] | Tuple[float,float,float] = 1.0,
         na: float = 1.5,
         wavelength: float = 645e-9
         ) -> jnp.ndarray:
@@ -23,6 +26,7 @@ def propagate_paraxial_jax(
         Ui (jnp.ndarray): Input field with dimensions of the transversal plane in the media. 2D tensor with shape (Hg, Wg).
         n_vol(jnp.ndarray): Distribution of the index of refraction. 3D tensor with shape (Do, Ho, Wo).
         mask (Optional[jnp.ndarray], optional): A mask to specify valid points with shape (Do, Ho, Wo) which fulfills that N = mask.sum(). Defaults to None.
+        init_plane_coord (Optional[jnp.ndarray], optional): Initial plane coordinates. Defaults to None.
         prop_pix_size(jnp.ndarray): Pixel size of the propagation grid. Defaults to 1.0.
         obj_pix_size(jnp.ndarray): Pixel size of the object. Defaults to 1.0.
         na (float, optional): Average index of refraction. Defaults to 1.5.
@@ -32,17 +36,18 @@ def propagate_paraxial_jax(
         Uo(jnp.ndarray): Output field.
     """
 
-    shape_obj = tuple(n_vol.shape)
-    t_obj_pix_size = obj_pix_size[1:] if isinstance(obj_pix_size, list | tuple) else obj_pix_size
     t_prop_pix_size = prop_pix_size[1:] if isinstance(prop_pix_size, list | tuple) else prop_pix_size
-    dz = prop_pix_size[0] if isinstance(prop_pix_size, list | tuple) else prop_pix_size
+    dz = prop_pix_size[0] if isinstance(prop_pix_size, tuple | list) else prop_pix_size
+    t_obj_pix_size = obj_pix_size[1:] if isinstance(obj_pix_size, list | tuple) else obj_pix_size
 
-    Fy, Fx = fft_coord_jax(shape_obj[1:], t_obj_pix_size)
-    coord_plane = coord_jax((1, ), )
+    z_dir = jnp.cross(init_plane_coord[0,1] - init_plane_coord[0,0], 
+                      init_plane_coord[1,0] - init_plane_coord[0,0])
+    z_vec = z_dir * dz / jnp.sqrt((z_dir**2).sum())
+    
+    Fy, Fx = fft_coord_jax(prop_shape[1:], t_prop_pix_size)
 
     prop_fact = paraxial_propagator_jax(Fy, Fx, dz, na, wavelength)
 
-    
     #trilinear_interpolate(plane_coords, n_vol, na, mask)
 
     return jnp.ones_like(Ui)
@@ -179,7 +184,7 @@ def propagate_paraxial_sta_check(
     for i in range(Nz):
         Uo = iFT2(parax_prop * FT2(torch.exp((1j * torch.pi * dz /(na * wavelength))*(na**2-n_vol[i]**2)) *
                                     iFT2(parax_prop * FT2(Uo))))
-        L_mod[i] = ((Uo.abs()**2).sum() - mod_0) * (tpix_size**2 if isinstance(tpix_size, (int, float)) else float(np.prod(tpix_size)))
+        L_mod[i] = ((Uo.abs()**2).sum() - mod_0) * (tpix_size**2 if isinstance(tpix_size, (int, float)) else float(np.prod(tpix_size))) / mod_0
         
     return Uo, L_mod
 

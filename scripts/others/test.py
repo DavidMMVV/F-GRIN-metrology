@@ -68,3 +68,17 @@ except:
     except: jax_device = jax.devices("cpu")
 
 print(jax_device)
+
+y = jnp.array([0,1,-1])
+x = jnp.array([0,1,1])
+z = jnp.cross(y,x)
+print(z / np.sqrt((z**2).sum()))
+
+from fgrinmet.utils import coord_jax, FT2, iFT2
+import matplotlib.pyplot as plt
+Y, X = coord_jax((100,100), 1)
+res = 1 * (jnp.sqrt(Y**2 + X**2) <= 25)
+res_ft = iFT2(FT2(res))
+plt.figure()
+plt.imshow(jnp.abs(res_ft))
+plt.show()

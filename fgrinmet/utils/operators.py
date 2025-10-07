@@ -12,7 +12,7 @@ def FT2(x: np.ndarray) -> np.ndarray: ...
 def FT2(x: torch.Tensor) -> torch.Tensor: ...
 def FT2(x):
     if isinstance(x, jnp.ndarray):
-        return jnp.fft.fft2(jnp.fft.fftshift(x))
+        return jnp.fft.fftshift(jnp.fft.fft2(x))
     elif isinstance(x, torch.Tensor):
         return torch.fft.fftshift(torch.fft.fft2(x))
     elif isinstance(x, np.ndarray):
