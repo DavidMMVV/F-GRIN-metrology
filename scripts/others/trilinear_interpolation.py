@@ -7,58 +7,6 @@ from tqdm import tqdm # type: ignore
 
 from typing import Optional
 
-def trilinear_interpolation(
-        points: jnp.ndarray,
-        values: jnp.ndarray,
-        outside: float = 1.0,
-        mask: Optional[jnp.ndarray] = None) -> jnp.ndarray:
-    
-    """Perform trilinear interpolation on a 3D grid.
-
-    Args:
-        points (jnp.ndarray): The 3D coordinates to interpolate at. It should be of shape (3, (N, ...)) where N is the number of points in this specific dimension.
-        values (jnp.ndarray): The values to interpolate. If mask is None it should be of shape (D, H, W). If mask is given it should be a 1-D array of shape (N).
-        outside (float, optional): The value to return for points outside the grid and masked points. Defaults to 1.0.
-        mask (Optional[jnp.ndarray], optional): A mask to specify valid points with shape (D, H, W) which fulfills that N = mask.sum(). Defaults to None.
-
-    Returns:
-        jnp.ndarray: The interpolated values at the specified points.
-    """
-    
-    if mask is not None:
-        values_grid = jnp.ones_like(mask, dtype=values.dtype).at[mask].set(values)
-        grid_shape = jnp.array(values.shape)
-    else:
-        mask = jnp.ones(values.shape, dtype=bool)
-        values_grid = values
-        grid_shape = jnp.array(values.shape)
-    dim_exp = tuple((points.ndim-1)*[None])
-
-    # generate the offset for the 8 corners
-    offsets = jnp.array([[0,0,0],
-                         [0,0,1],
-                         [0,1,0],
-                         [0,1,1],
-                         [1,0,0],
-                         [1,0,1],
-                         [1,1,0],
-                         [1,1,1]], dtype=jnp.int32)
-    
-    # Compute the floor and the decimal factor dependent on distance of the triliniar expresion
-    floor_points = jnp.floor(points).astype(jnp.int32)
-    dec_fact = (offsets[::-1, :, *dim_exp] + (-1)**(offsets[::-1, :, *dim_exp]) * (points - floor_points)[None]).prod(axis=1)
-
-    # Compute the values in the corners
-    corners = floor_points[None] + offsets[:, :, *dim_exp]
-    condition = (((corners >= 0).prod(axis=1).astype(bool)) &
-                 ((corners < grid_shape[None, :, *dim_exp]).prod(axis=1).astype(bool)) & 
-                 (mask[corners[:,0], corners[:,1], corners[:,2]]))
-    corners_val = jnp.where(condition, values_grid[corners[:,0], corners[:,1], corners[:,2]], outside)
-
-    # Find the interpolated values
-    c = (corners_val * dec_fact).sum(axis=0)
-    return c
-
 def compute_planes_scan(Zpg0, Ypg0, Xpg0, n_vec, n, n_a, num_planes):
     def body_fun(carry, z):
         Zpg0, Ypg0, Xpg0, n_vec, n, n_a = carry

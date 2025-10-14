@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import jax.numpy as jnp
+from jax import jit
 
 from typing import List, Tuple, Optional
 
@@ -8,6 +9,7 @@ from ..utils import coord_jax, fft_coord_jax, coord_pytorch, fft_coord_pytorch, 
 from .interpolation import trilinear_interpolate
 
 # TODO: Implement in jax
+@jit
 def propagate_paraxial_jax(
         Ui: jnp.ndarray,
         n_vals: jnp.ndarray,
@@ -35,6 +37,18 @@ def propagate_paraxial_jax(
     Returns:
         Uo(jnp.ndarray): Output field.
     """
+    def step(carry_in, iterable):
+        Ui, prop_plane_in, na, mask, z_vec, prop_fact = carry_in
+        i = iterable
+        plane_coord = prop_plane_in + z_vec[None, None]
+
+        n_plane = trilinear_interpolate(plane_coord, n_vals, na, mask)
+
+        Uo = paraxial_propagation_step_jax(Ui, n_plane, prop_fact, dz, na, wavelength)
+        carry_out = (Uo, plane_coord, na, mask, z_vec, prop_fact)
+
+        return carry_out, None #stored_values
+
 
     t_prop_pix_size = prop_pix_size[1:] if isinstance(prop_pix_size, list | tuple) else prop_pix_size
     dz = prop_pix_size[0] if isinstance(prop_pix_size, tuple | list) else prop_pix_size
@@ -47,8 +61,11 @@ def propagate_paraxial_jax(
     Fy, Fx = fft_coord_jax(prop_shape[1:], t_prop_pix_size)
 
     prop_fact = paraxial_propagator_jax(Fy, Fx, dz, na, wavelength)
+    carry_in = (Ui, init_plane_coord, na, mask, z_vec, prop_fact, dz, na, wavelength)
 
-    #trilinear_interpolate(plane_coords, n_vol, na, mask)
+    for i in range(prop_shape[0]):
+        step
+        #trilinear_interpolate(plane_coords, n_vol, na, mask)
 
     return jnp.ones_like(Ui)
 
@@ -69,7 +86,7 @@ def paraxial_propagator_jax(
         wavelength (float, optional): Wavelength of the light in vacuum. Defaults to 645e-9.
 
     Returns:
-        jnp.ndarray: _description_
+        propagator (jnp.ndarray): Paraxial propagator factor.
     """
     return jnp.exp((1j * torch.pi * wavelength * dz / (2 * na)) * (Fx**2 + Fy**2))
 
@@ -97,6 +114,21 @@ def paraxial_propagation_step_jax(
 
     return iFT2(prop_factor * FT2(jnp.exp((1j * torch.pi * dz /(na * wavelength))*(na**2-n_plane**2)) *
                             iFT2(prop_factor * FT2(Ui))))
+
+def energy(
+        field: jnp.ndarray, 
+        t_pix_size: float | List[float] | Tuple[float,float]):
+    """Computes the energy of the field in a certain plane.
+
+    Args:
+        field (jnp.ndarray): Field distribution in the plane.
+        t_pix_size (float | List[float] | Tuple[float,float]): Pizel sizes in the plane.
+
+    Returns:
+        Energy(float): Energy of the field in the plane.
+    """
+
+    return ((jnp.abs(field)**2).sum())*(np.prod(t_pix_size) if isinstance(t_pix_size, list | tuple) else t_pix_size**2)
 
 def propagate_paraxial(
         Ui: torch.Tensor,  # 2D tensor with shape (H, W) 

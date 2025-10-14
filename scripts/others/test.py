@@ -72,13 +72,14 @@ print(jax_device)
 y = jnp.array([0,1,-1])
 x = jnp.array([0,1,1])
 z = jnp.cross(y,x)
-print(z / np.sqrt((z**2).sum()))
+res = z / np.sqrt((z**2).sum())
+print(res)
 
-from fgrinmet.utils import coord_jax, FT2, iFT2
-import matplotlib.pyplot as plt
-Y, X = coord_jax((100,100), 1)
-res = 1 * (jnp.sqrt(Y**2 + X**2) <= 25)
-res_ft = iFT2(FT2(res))
-plt.figure()
-plt.imshow(jnp.abs(res_ft))
-plt.show()
+def f_field(U, mask):
+    ind = jnp.ones_like(mask).at[mask].set(U)
+    exit = ind * 1.5
+    return exit
+
+print(__file__)
+#out = jax.checkpoint(f_field, )
+
