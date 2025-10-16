@@ -2,13 +2,28 @@ import torch
 import numpy as np
 import jax.numpy as jnp
 from jax import jit
+from flax import struct
 
 from typing import List, Tuple, Optional
 
 from ..utils import coord_jax, fft_coord_jax, coord_pytorch, fft_coord_pytorch, FT2, iFT2
 from .interpolation import trilinear_interpolate
 
-# TODO: Implement in jax
+
+# TODO: Implemennt a flexible way to perform split step 
+def split_step(
+    Ui: jnp.ndarray
+):
+    pass
+    
+# TODO Define object class
+@struct.dataclass
+class GridMedia:
+    n_vals: jnp.ndarray
+    obj_pix_size: float | List[float] | Tuple[float,float,float] = 1.0
+    mask: Optional[jnp.ndarray] = None
+
+# TODO: Revise and complete propagate_paraxial_jax
 @jit
 def propagate_paraxial_jax(
         Ui: jnp.ndarray,

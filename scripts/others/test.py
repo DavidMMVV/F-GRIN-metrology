@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
+import time
 
 # enable float64 in JAX
 jax.config.update("jax_enable_x64", True)
@@ -83,3 +84,72 @@ def f_field(U, mask):
 print(__file__)
 #out = jax.checkpoint(f_field, )
 
+print(jax.local_device_count())
+
+fun = jax.vmap(lambda col1, mat2 : (jax.vmap(lambda col1, col2: (col1*col2).sum(), in_axes=(None,1), out_axes=(0))(col1, mat2)), in_axes=(1, None), out_axes=(0))
+vec_fun = lambda mat1, mat2 : mat1.T@mat2
+a = jnp.arange(10000*10000).reshape(10000,10000)
+b = jnp.arange(10000*9000).reshape(10000,9000)
+c = jnp.arange(10000*10000).reshape(10000,10000)
+d = jnp.arange(10000*9000).reshape(10000,9000)
+#
+#start = time.perf_counter()
+#res1 = fun(a, b)
+#end = time.perf_counter()
+#print(f"Time vmap: {end-start}s")
+
+#start = time.perf_counter()
+#res1 = fun(a, b)
+#end = time.perf_counter()
+#print(f"Time vmap: {end-start}s")
+#
+#start = time.perf_counter()
+#res1 = fun(a, b)
+#end = time.perf_counter()
+#print(f"Time vmap: {end-start}s")
+#
+comp_fun = jax.jit(fun)
+comp_vec_fun = jax.jit(vec_fun)
+
+start = time.perf_counter()
+res1 = comp_fun(a, b)
+end = time.perf_counter()
+print(f"Time vmap+jit: {end-start}s")
+
+start = time.perf_counter()
+res1 = comp_fun(a, b)
+end = time.perf_counter()
+print(f"Time vmap+jit: {end-start}s")
+
+start = time.perf_counter()
+res1 = comp_fun(d, c)
+end = time.perf_counter()
+print(f"Time vmap+jit: {end-start}s")
+
+start = time.perf_counter()
+res1 = comp_fun(d, c)
+end = time.perf_counter()
+print(f"Time vmap+jit: {end-start}s")
+
+start = time.perf_counter()
+res2 = comp_vec_fun(a,b)
+end = time.perf_counter()
+print(f"Time indexing jit: {end-start}s")
+
+start = time.perf_counter()
+res2 = comp_vec_fun(a,b)
+end = time.perf_counter()
+print(f"Time indexing jit: {end-start}s")
+
+start = time.perf_counter()
+res2 = comp_vec_fun(d,c)
+end = time.perf_counter()
+print(f"Time indexing jit: {end-start}s")
+
+
+start = time.perf_counter()
+res2 = comp_vec_fun(d,c)
+end = time.perf_counter()
+print(f"Time indexing jit: {end-start}s")
+#print(res1)
+#print(res2)

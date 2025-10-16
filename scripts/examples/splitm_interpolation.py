@@ -19,15 +19,44 @@ from config import LOCAL_DATA_DIR
 
 mpl.rcParams['axes.unicode_minus'] = False
 
+def trilinear_single(point, values, outside, mask):
+    grid_shape = jnp.array(values.shape)
+    floor_pt = jnp.floor(point).astype(int)
+    dec = point - floor_pt
+
+    offsets = jnp.array([
+        [0,0,0],[0,0,1],[0,1,0],[0,1,1],
+        [1,0,0],[1,0,1],[1,1,0],[1,1,1]
+    ], dtype=int)
+
+    def interp_one(off):
+        corner = floor_pt + off  # shape (3,)
+        inside = jnp.all((corner >= 0) & (corner < grid_shape))
+        w = jnp.prod(jnp.where(off == 0, 1 - dec, dec))
+        
+        # acceder solo al índice escalar de cada dimensión
+        val = jnp.where(
+            inside & mask[corner[0], corner[1], corner[2]],
+            values[corner[0], corner[1], corner[2]],
+            outside
+        )
+        return w * val
+
+    return jnp.sum(jax.vmap(interp_one)(offsets))
+
+# Vectorización sobre todos los puntos del plano
+trilinear_vmap = jax.jit(jax.vmap(trilinear_single, in_axes=(0, None, None, None)))
+
+
 if __name__ == "__main__":
     # Define object parameters
     shape_obj = (128, 128, 128)
     wavelength = 1.0
-    pix_size_object = 2*5*8*0.5 * wavelength
+    pix_size_object = 5*4*0.5 * wavelength
     center_object = (0.0, 0.0, 0.0)
-    radius = 10*4*50.0 * wavelength
+    radius = 10*50.0 * wavelength
     Lzo, Lyo, Lxo = (shape_obj[0] * pix_size_object, shape_obj[1] * pix_size_object, shape_obj[2] * pix_size_object)
-    w = 10*4*50.0  * wavelength
+    w = 10*50.0  * wavelength
     n_a = 1.5
     dn = 0.3
     
@@ -46,9 +75,9 @@ if __name__ == "__main__":
     #n = n_a + 0.5 * (R <= radius)
 
     # Define grid parameters
-    shape_grid = (1024, 5*1024, 5*1024)
+    shape_grid = (1024*16, 1024, 1024)
     pix_size_plane = 10*0.125  * wavelength
-    dz = 10*8*(0.125)  * wavelength
+    dz = 9 * (0.125/4)  * wavelength
     center_object = (-(shape_grid[0]*dz)/2 + (shape_obj[0]*pix_size_object)/2,0,0)
     vec_plane = (0,0,0)#(0, 0, jnp.pi / 4)  # normal vector of the plane
     rot_m = rotation_matrix(*vec_plane)
@@ -91,10 +120,13 @@ if __name__ == "__main__":
     for i in tqdm(range(shape_grid[0])):
         Zpg, Ypg, Xpg = Zpg0 + i * n_vec[0], Ypg0 + i * n_vec[1], Xpg0 + i * n_vec[2]
 
-        cord_in = jnp.concatenate([Zpg[:,:,None], Ypg[:,:,None], Xpg[:,:,None]], axis=-1)
+        coord_in = jnp.concatenate([Zpg[:,:,None], Ypg[:,:,None], Xpg[:,:,None]], axis=-1)
 
+        #coord_flat = coord_in.reshape(-1,3)
+        #n_plane_flat = trilinear_vmap(coord_flat, n, n_a, mask)
+        #n_plane = n_plane_flat.reshape(shape_grid[1:])
+        n_plane = trilinear_interpolation_jit(coord_in, n, n_a, mask)
 
-        n_plane = trilinear_interpolation_jit(cord_in, n, outside=n_a, mask=mask)
         U_o = prop_step(U_i, n_plane, propagator, dz, n_a, wavelength)
         U_i = U_o
         E_arr[i] = (energy(U_o, pix_size_plane)-E_0) / E_0
@@ -144,7 +176,7 @@ if __name__ == "__main__":
 
     dat_save_dir = (LOCAL_DATA_DIR / Path(__file__).name.split(".")[0])
     os.makedirs(dat_save_dir, exist_ok=True)    
-    filename = "2mm_sphere_4"
+    filename = "2mm_sphere_5"
     save = True
 
     fig2, sub2 = plt.subplots(1,2)

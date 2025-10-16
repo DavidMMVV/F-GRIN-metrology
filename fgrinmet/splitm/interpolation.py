@@ -101,7 +101,6 @@ def trilinear_interpolate(
     
     if mask is not None and values.ndim == 1:
         values_grid = jnp.full(mask.shape, outside, dtype=values.dtype).at[tuple(jnp.argwhere(mask).T)].set(values)
-        #values_grid = jnp.where(mask, values, outside)
         grid_shape = jnp.array(mask.shape)
     else:
         mask = jnp.ones(values.shape, dtype=bool)
