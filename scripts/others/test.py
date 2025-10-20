@@ -84,6 +84,22 @@ def f_field(U, mask):
 print(__file__)
 #out = jax.checkpoint(f_field, )
 
+import optax
+import jax
+import jax.numpy as jnp
+def f(x): return jnp.sum(x ** 2)  # simple quadratic function
+solver = optax.adam(learning_rate=0.003)
+params = jnp.array([1., 2., 3.])
+print('Objective function: ', f(params))
+opt_state = solver.init(params)
+print(f"Opt_state: {opt_state}")
+for _ in range(5):
+    grad = jax.grad(f)(params)
+    updates, opt_state = solver.update(grad, opt_state, params)
+    params = optax.apply_updates(params, updates)
+    print('Objective function: {:.2E}'.format(f(params)))
+    print(f"Opt_state: {opt_state}")
+
 print(jax.local_device_count())
 
 fun = jax.vmap(lambda col1, mat2 : (jax.vmap(lambda col1, col2: (col1*col2).sum(), in_axes=(None,1), out_axes=(0))(col1, mat2)), in_axes=(1, None), out_axes=(0))
@@ -153,3 +169,4 @@ end = time.perf_counter()
 print(f"Time indexing jit: {end-start}s")
 #print(res1)
 #print(res2)
+

@@ -36,3 +36,35 @@ def iFT2(x):
     else:
         raise TypeError(f"Unsupported type: {type(x)}")
     
+@overload
+def FT2_i(x: jnp.ndarray) -> jnp.ndarray: ...
+@overload
+def FT2_i(x: np.ndarray) -> np.ndarray: ...
+@overload
+def FT2_i(x: torch.Tensor) -> torch.Tensor: ...
+def FT2_i(x):
+    if isinstance(x, jnp.ndarray):
+        return jnp.fft.fft2(jnp.fft.fftshift(x))
+    elif isinstance(x, torch.Tensor):
+        return torch.fft.fft2(torch.fft.fftshift(x))
+    elif isinstance(x, np.ndarray):
+        return np.fft.fft2(np.fft.fftshift(x))
+    else:
+        raise TypeError(f"Unsupported type: {type(x)}")
+    
+@overload
+def iFT2_i(x: jnp.ndarray) -> jnp.ndarray: ...
+@overload
+def iFT2_i(x: np.ndarray) -> np.ndarray: ...
+@overload
+def iFT2_i(x: torch.Tensor) -> torch.Tensor: ...
+def iFT2_i(x):
+    if isinstance(x, jnp.ndarray):
+        return jnp.fft.ifftshift(jnp.fft.ifft2(x))
+    elif isinstance(x, torch.Tensor):
+        return torch.fft.ifftshift(torch.fft.ifft2(x))
+    elif isinstance(x, np.ndarray):
+        return np.fft.ifftshift(np.fft.ifft2(x))
+    else:
+        raise TypeError(f"Unsupported type: {type(x)}")
+    

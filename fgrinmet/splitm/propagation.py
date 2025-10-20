@@ -6,7 +6,7 @@ from flax import struct
 
 from typing import List, Tuple, Optional
 
-from ..utils import coord_jax, fft_coord_jax, coord_pytorch, fft_coord_pytorch, FT2, iFT2
+from ..utils import coord_jax, fft_coord_jax, coord_pytorch, fft_coord_pytorch, FT2, iFT2, FT2_i, iFT2_i
 from .interpolation import trilinear_interpolate
 
 
@@ -129,6 +129,31 @@ def paraxial_propagation_step_jax(
 
     return iFT2(prop_factor * FT2(jnp.exp((1j * torch.pi * dz /(na * wavelength))*(na**2-n_plane**2)) *
                             iFT2(prop_factor * FT2(Ui))))
+
+def paraxial_propagation_step_jax_conj(
+        Ui: jnp.ndarray,
+        n_plane: jnp.ndarray,
+        prop_factor_conj: jnp.ndarray,
+        dz: float = 1.0,
+        na: float = 1.5,
+        wavelength: float = 645e-9
+    ) -> jnp.ndarray:
+    """Computes a single propagaion step in paraxial approximation.
+
+    Args:
+        Ui (jnp.ndarray): Input field with dimensions of the transversal plane in the media. 2D tensor with shape (Hg, Wg).
+        n_plane(jnp.ndarray): Values of the index of refraction in the slice.
+        prop_factor (jnp.ndarray): Free space propagation factor.
+        dz (float, optional): Step length. Defaults to 1.0.
+        na (float, optional): Average index of refraction of the media. Defaults to 1.5.
+        wavelength (float, optional): Wavelength of the light in vacuum. Defaults to 645e-9.
+
+    Returns:
+        Uo(jnp.ndarray): Output field from the slice.
+    """
+
+    return FT2_i(prop_factor_conj * iFT2_i(jnp.exp(-(1j * torch.pi * dz /(na * wavelength))*(na**2-n_plane**2)) *
+                            FT2_i(prop_factor_conj * iFT2_i(Ui))))
 
 def energy(
         field: jnp.ndarray, 

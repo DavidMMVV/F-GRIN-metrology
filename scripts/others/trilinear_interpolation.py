@@ -2,7 +2,7 @@
 import time
 import jax
 import jax.numpy as jnp
-from fgrinmet.splitm import rotation_matrix
+from fgrinmet.splitm import rotation_matrix, trilinear_interpolate
 from tqdm import tqdm # type: ignore
 
 from typing import Optional
@@ -14,7 +14,7 @@ def compute_planes_scan(Zpg0, Ypg0, Xpg0, n_vec, n, n_a, num_planes):
         Ypg = Ypg0 + z * n_vec[1]
         Xpg = Xpg0 + z * n_vec[2]
         cord_in = jnp.stack([Zpg, Ypg, Xpg], axis=0)
-        plane = trilinear_interpolation(cord_in, n, outside=n_a)
+        plane = trilinear_interpolate(cord_in, n, outside=n_a)
         carry_out = (Zpg0, Ypg0, Xpg0, n_vec, n, n_a)
         result_sum = plane.sum()
         return carry_out, result_sum
