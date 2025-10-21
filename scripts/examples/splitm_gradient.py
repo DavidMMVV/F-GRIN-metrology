@@ -329,8 +329,8 @@ if __name__ == "__main__":
             coord_plane = coord_plane_0 + d * norm_vect
             n_plane = trilinear_interpolate(coord_plane, n_guess, n_a, mask)
             U_diff = paraxial_propagation_step_jax_conj(U_diff, n_plane, propagator_conj, pix_size_prop[0], n_a, wavelength)
-            #grad_const = 
-            dU_dn_ijd = jnp.real((4j * jnp.pi * pix_size_prop[0] * n_plane / (N * wavelength * n_a)) * (U_diff * U_o_guess))
+            U_free = paraxial_propagation_step_jax(U_o_guess, jnp.zeros_like(n_plane), propagator, pix_size_prop[0], n_a, wavelength)
+            dU_dn_ijd = jnp.real((4j * jnp.pi * pix_size_prop[0] * n_plane / (N * wavelength * n_a)) * (U_diff * U_free))
             grad_n_guess = grad_n_guess.at[d].set(dU_dn_ijd)# * mask[d])
             U_o_guess = paraxial_propagation_step_jax(U_o_guess, n_plane, propagator, pix_size_prop[0], n_a, wavelength)
         
