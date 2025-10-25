@@ -5,6 +5,14 @@ import time
 
 # enable float64 in JAX
 jax.config.update("jax_enable_x64", True)
+import matplotlib.pyplot as plt
+slit = (jnp.abs(jnp.arange(-100, 101,1))>=10)*(jnp.abs(jnp.arange(-100, 101,1))>=20)
+
+plt.figure()
+plt.plot(jnp.fft.fftshift(jnp.fft.fftfreq(201)), jnp.abs(jnp.fft.fftshift(jnp.fft.fft(slit))))
+plt.figure()
+plt.plot(jnp.arange(-100, 101,1), slit)
+plt.show()
 
 b_0 = np.array([1.0, 2.0, 3.0], dtype=jnp.complex128)
 a = jnp.arange(9, dtype=jnp.float64).reshape((3, 3))

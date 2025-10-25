@@ -83,7 +83,7 @@ def propagate_paraxial_jax(
         #trilinear_interpolate(plane_coords, n_vol, na, mask)
 
     return jnp.ones_like(Ui)
-
+#%%
 def paraxial_propagator_jax(
         Fy: jnp.ndarray,
         Fx: jnp.ndarray,
