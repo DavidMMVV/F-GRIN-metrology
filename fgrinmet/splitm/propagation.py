@@ -6,7 +6,7 @@ from flax import struct
 
 from typing import List, Tuple, Optional
 
-from ..utils import coord_jax, fft_coord_jax, coord_pytorch, fft_coord_pytorch, FT2, iFT2, FT2_i, iFT2_i
+from ..utils import coord_jax, fft_coord_jax, coord_pytorch, fft_coord_pytorch, FT2, iFT2
 from .interpolation import trilinear_interpolate
 
 
@@ -152,8 +152,8 @@ def paraxial_propagation_step_jax_conj(
         Uo(jnp.ndarray): Output field from the slice.
     """
 
-    return FT2_i(prop_factor_conj * iFT2_i(jnp.exp(-(1j * torch.pi * dz /(na * wavelength))*(na**2-n_plane**2)) *
-                            FT2_i(prop_factor_conj * iFT2_i(Ui))))
+    return FT2(prop_factor_conj * iFT2(jnp.exp(-(1j * torch.pi * dz /(na * wavelength))*(na**2-n_plane**2)) *
+                            FT2(prop_factor_conj * iFT2(Ui))))
 
 def energy(
         field: jnp.ndarray, 

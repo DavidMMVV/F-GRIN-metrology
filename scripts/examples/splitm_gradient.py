@@ -77,7 +77,7 @@ def trilinear_single(
 trilinear = jax.vmap((trilinear_single), in_axes=(0, None, None, None))
 trilinear_comp = jax.jit(trilinear)
 
-@partial(jax.jit, static_argnums=(9, 10))
+#@partial(jax.jit, static_argnums=(9, 10))
 def A_d(
     U_i: jnp.ndarray, 
     n_distr: jnp.ndarray, 
