@@ -685,6 +685,7 @@ if __name__ == "__main__":
     sub6[2].set_aspect(0.5)
     plt.tight_layout()
 
+    save = False
     if save:
         filename = "6"
         with open(dat_save_dir/(filename+".json"), "w") as f:
