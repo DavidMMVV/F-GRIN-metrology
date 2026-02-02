@@ -28,9 +28,8 @@ def prop_coord_to_obj_coord(
 def trilinear_interpolate_grad(
         points: jnp.ndarray,
         values: jnp.ndarray,
-        gradient: jnp.ndarray,
         outside: float = 1.0,
-        mask: Optional[jnp.ndarray] = None) -> jnp.ndarray:
+        mask: Optional[jnp.ndarray] = None) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     
     """Perform trilinear interpolation on a 3D grid.
 
@@ -44,8 +43,8 @@ def trilinear_interpolate_grad(
         jnp.ndarray: The interpolated values at the specified points.
     """
     
-    if mask is not None:
-        values_grid = jnp.ones_like(mask, dtype=values.dtype).at[mask].set(values)
+    if mask is not None and values.ndim == 1:
+        values_grid = jnp.full(mask.shape, outside, dtype=values.dtype).at[tuple(jnp.argwhere(mask).T)].set(values)
         grid_shape = jnp.array(mask.shape)
     else:
         mask = jnp.ones(values.shape, dtype=bool)
@@ -68,18 +67,18 @@ def trilinear_interpolate_grad(
     dec_fact = (offsets[::-1, *dim_exp, :] + (-1)**(offsets[::-1, *dim_exp, :]) * (points - floor_points)[None]).prod(axis=3)
 
     # Compute the values in the corners
-    corners = floor_points[None] + offsets[:, :, *dim_exp]
+    corners = floor_points[None] + offsets[:, *dim_exp, :]
         
-    condition = (((corners >= 0).prod(axis=1).astype(bool)) &
-                 ((corners < grid_shape[None, :, *dim_exp]).prod(axis=1).astype(bool)) & 
-                 (mask[corners[:,0], corners[:,1], corners[:,2]]))
+    condition = (((corners >= 0).prod(axis=3).astype(bool)) &
+                 ((corners < grid_shape[None, *dim_exp, :]).prod(axis=3).astype(bool)) & 
+                 (mask[corners[:,:,:,0], corners[:,:,:,1], corners[:,:,:,2]]))
     
-    corners_val = jnp.where(condition, values_grid[corners[:,0], corners[:,1], corners[:,2]], outside)
+    corners_val = jnp.where(condition, values_grid[corners[:,:,:,0], corners[:,:,:,1], corners[:,:,:,2]], outside)
 
     # Find the interpolated values
     c = (corners_val * dec_fact).sum(axis=0)
-    c_grad = c
-    return c
+
+    return c, dec_fact, corners, condition
 
 def trilinear_interpolate(
         points: jnp.ndarray,
@@ -134,3 +133,18 @@ def trilinear_interpolate(
     # Find the interpolated values
     c = (corners_val * dec_fact).sum(axis=0)
     return c
+
+if __name__ == "__main__":
+    # Simple test
+    points = jnp.array([[[0.25, 0.25, 0.25], [0.5,0.5,0.5]],
+                        [[0.75, 0.75, 0.75], [1, 1, 1]],
+                        [[1.25, 1.25, 1.25], [1.5, 1.5, 1.5]]])
+    
+    values = jnp.arange(27).reshape((3,3,3))
+    values_guess = jnp.zeros_like(values)
+    
+    grad, corners, mask = trilinear_interpolate_grad(points, values, outside=-1.0)
+
+    print(grad.shape)
+    print(corners.shape)
+    print(mask.shape)
