@@ -7,6 +7,7 @@ from typing import Tuple
 import optax
 import time
 from functools import partial
+from jax import random
 
 from fgrinmet.utils.operators import FT2, iFT2
 from fgrinmet.splitm.interpolation import trilinear_interpolate, trilinear_interpolate_grad
@@ -59,6 +60,57 @@ def tv_loss_periodic(n, eps=1e-6):
     tv = jnp.sqrt(dx**2 + dy**2 + dz**2 + eps)
     return jnp.sum(tv)
 
+def rbf_init(
+    pix_sizes: jnp.ndarray, 
+    shape: jnp.ndarray, 
+    n_rbf: Tuple[int,...],
+    li: jnp.ndarray,
+    key: int = 1
+    ) -> jnp.ndarray:
+
+    coords = pix_sizes * ((((jnp.array(jnp.meshgrid(*[jnp.arange(i) for i in n_rbf], indexing='ij')).reshape(len(n_rbf), -1) + 1) * (shape / (1 + jnp.array(n_rbf)))[:,None]).T) - (shape[None] // 2))
+    li_arr = jnp.tile(li, (coords.shape[0], 1))
+    keygen = random.key(key)
+
+    weights = random.uniform(keygen, shape=(coords.shape[0],1), minval=0.0, maxval=1.0)
+    params = jnp.concatenate(
+        [weights, jnp.concat(
+            [jnp.concat(
+                [coords[:, i, None],li_arr[:, i, None]], 
+                        axis=1) for i in range(len(n_rbf))], 
+            axis=1)], 
+        axis = 1)
+    return params
+
+def rbf_eval(
+        rbf_params: jnp.ndarray,
+        coords: jnp.ndarray
+    ) -> jnp.ndarray:
+    result = jnp.zeros_like(coords[:,:,0])
+    for i in range(len(rbf_params)):
+        dims = coords.shape[-1]
+        dims_exp = dims*[None]
+        result += rbf_params[i,0] * jnp.exp(-((coords - rbf_params[i,1::2][*dims_exp])**2/(rbf_params[i,2::2][*dims_exp])**2).sum(axis=-1))
+    return result
+
+def rbf_grad(
+        rbf_params: jnp.ndarray,
+        coords: jnp.ndarray,
+        ground_truth: jnp.ndarray
+) -> jnp.ndarray:
+    
+    gradient = jnp.zeros_like(rbf_params)
+    result = rbf_eval(rbf_params, coords)
+    mse_err = 2 * (result - ground_truth)
+    dims = coords.shape[-1]
+    dims_exp = dims*[None]
+
+    for i in range(len(rbf_params)):
+        common_fact = jnp.exp(-jnp.sum((coords - rbf_params[i,1::2])**2/(rbf_params[i,2::2])**2, axis=-1))
+        gradient = gradient.at[i,0].set((mse_err*common_fact).mean())
+        gradient = gradient.at[i,1::2].set((mse_err[...,None] * common_fact[...,None] * 2 * rbf_params[i,0] * (coords-rbf_params[i,1::2][*dims_exp]) / (rbf_params[i,2::2][*dims_exp]**2)).mean(axis=(0,1)))
+        gradient = gradient.at[i,2::2].set((mse_err[...,None] * common_fact[...,None] * 2 * rbf_params[i,0] * (coords-rbf_params[i,1::2][*dims_exp])**2 / (rbf_params[i,2::2][*dims_exp]**3)).mean(axis=(0,1)))
+    return gradient
 
 if __name__ == "__main__":
 
@@ -70,7 +122,7 @@ if __name__ == "__main__":
 
     # Definition of the propagation grid
     prop_shape = jnp.array((16,8*128,8*128))
-    prop_pix_sizes = jnp.array(((l/2), 8*l, 8*l))
+    prop_pix_sizes = jnp.array(((l/4), 8*l, 8*l))
     prop_center = jnp.array(((prop_shape[0]//2)*prop_pix_sizes[0],
                              (prop_shape[1]//2)*prop_pix_sizes[1],
                              (prop_shape[2]//2)*prop_pix_sizes[2]))
@@ -89,7 +141,7 @@ if __name__ == "__main__":
 
     # Definition of the object grid
     obj_shape = jnp.array((16,128,128))
-    obj_pix_sizes = jnp.array((l/2, 8*8*l, 8*8*l))
+    obj_pix_sizes = jnp.array((l/4, 8*8*l, 8*8*l))
     obj_center = jnp.array(((obj_shape[0]//2)*obj_pix_sizes[0],
                             (obj_shape[1]//2)*obj_pix_sizes[1],
                             (obj_shape[2]//2)*obj_pix_sizes[2]))
@@ -128,12 +180,12 @@ if __name__ == "__main__":
     plt.tight_layout()
 
     # Definition of the input waves
-    modes = 4
-    wx, wy = (8*16*20 * l, 8*16*20 * l)
-    G = jnp.exp(-((x_p[None]/wx)**2 + (y_p[:,None]/wy)**2))
-    Ui = jnp.array([G * hermite(i//modes)(jnp.sqrt(2)*y_p[:,None]/wy) * hermite(i%modes)(jnp.sqrt(2)*x_p[None]/wx) for i in range(modes**2)], dtype=jnp.complex128)
-    Ui = Ui / Ui.max(axis=(1,2))[:,None, None]
-    #Ui = jnp.ones(prop_params["shape"][1:], dtype=jnp.complex128)[None]
+    modes = 1
+    #wx, wy = (8*16*20 * l, 8*16*20 * l)
+    #G = jnp.exp(-((x_p[None]/wx)**2 + (y_p[:,None]/wy)**2))
+    #Ui = jnp.array([G * hermite(i//modes)(jnp.sqrt(2)*y_p[:,None]/wy) * hermite(i%modes)(jnp.sqrt(2)*x_p[None]/wx) for i in range(modes**2)], dtype=jnp.complex128)
+    #Ui = Ui / Ui.max(axis=(1,2))[:,None, None]
+    Ui = jnp.ones(prop_params["shape"][1:], dtype=jnp.complex128)[None]
 
     fig, sub = plt.subplots(modes,modes)
     if Ui.shape[0] == 1:
