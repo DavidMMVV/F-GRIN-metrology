@@ -1,6 +1,5 @@
 import torch
 import jax.numpy as jnp
-import jax
 
 from typing import List, Tuple, Union
 

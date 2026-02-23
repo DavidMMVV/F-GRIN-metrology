@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
     # Definition of the propagation grid
     prop_shape = jnp.array((16,8*128,8*128))
-    prop_pix_sizes = jnp.array(((l/2), 8*l, 8*l))
+    prop_pix_sizes = jnp.array(((l/4), 8*l, 8*l))
     prop_center = jnp.array(((prop_shape[0]//2)*prop_pix_sizes[0],
                              (prop_shape[1]//2)*prop_pix_sizes[1],
                              (prop_shape[2]//2)*prop_pix_sizes[2]))
@@ -89,7 +89,7 @@ if __name__ == "__main__":
 
     # Definition of the object grid
     obj_shape = jnp.array((16,128,128))
-    obj_pix_sizes = jnp.array((l/2, 8*8*l, 8*8*l))
+    obj_pix_sizes = jnp.array((l/4, 8*8*l, 8*8*l))
     obj_center = jnp.array(((obj_shape[0]//2)*obj_pix_sizes[0],
                             (obj_shape[1]//2)*obj_pix_sizes[1],
                             (obj_shape[2]//2)*obj_pix_sizes[2]))
@@ -107,7 +107,7 @@ if __name__ == "__main__":
     n_a = 1.5
     r2 = (y_o[None,:,None]**2 + x_o[None,None]**2)*jnp.ones_like(z_o)[:,None,None]
     R = 8*16*20 * l
-    n_original = n_a + (0.1*(1-(r2/R**2)) * (r2 <= (R**2)))
+    n_original = n_a + (0.5*(1-(r2/R**2)) * (r2 <= (R**2)))
     eps_a =  n_a**2
     eps_original = n_original**2 - eps_a
 
@@ -128,7 +128,7 @@ if __name__ == "__main__":
     plt.tight_layout()
 
     # Definition of the input waves
-    modes = 4
+    modes = 3
     wx, wy = (8*16*20 * l, 8*16*20 * l)
     G = jnp.exp(-((x_p[None]/wx)**2 + (y_p[:,None]/wy)**2))
     Ui = jnp.array([G * hermite(i//modes)(jnp.sqrt(2)*y_p[:,None]/wy) * hermite(i%modes)(jnp.sqrt(2)*x_p[None]/wx) for i in range(modes**2)], dtype=jnp.complex128)
@@ -195,14 +195,14 @@ if __name__ == "__main__":
     if Ui.shape[0] == 1:
         im = sub.imshow(jnp.abs(Ui[0])**2, extent=ext_prop_xy)
         plt.colorbar(im, ax=sub)
-        sub.set_title(f"Intensity Mode (0,0)")
+        sub.set_title(f"Intensity Mode (i) (0,0)")
         sub.set_xlabel("$x(\\lambda)$")
         sub.set_ylabel("$y(\\lambda)$")
     else:
         for i in range(Ui.shape[0]):
             im = sub[i//modes,i%modes].imshow(jnp.abs(Ui[i])**2, extent=ext_prop_xy)
             plt.colorbar(im, ax=sub[i//modes,i%modes])
-            sub[i//modes,i%modes].set_title(f"Intensity Mode ({i//modes},{i%modes})")
+            sub[i//modes,i%modes].set_title(f"Intensity Mode (i) ({i//modes},{i%modes})")
             sub[i//modes,i%modes].set_xlabel("$x(\\lambda)$")
             sub[i//modes,i%modes].set_ylabel("$y(\\lambda)$")
     plt.tight_layout()
@@ -211,14 +211,14 @@ if __name__ == "__main__":
     if Ui.shape[0] == 1:
         im = sub.imshow(jnp.abs(Uo[0])**2, extent=ext_prop_xy)
         plt.colorbar(im, ax=sub)
-        sub.set_title(f"Intensity Mode (0,0)")
+        sub.set_title(f"Intensity Mode (o) (0,0)")
         sub.set_xlabel("$x(\\lambda)$")
         sub.set_ylabel("$y(\\lambda)$")
     else:
         for i in range(Uo.shape[0]):
             im = sub[i//modes,i%modes].imshow(jnp.abs(Uo[i])**2, extent=ext_prop_xy)
             plt.colorbar(im, ax=sub[i//modes,i%modes])
-            sub[i//modes,i%modes].set_title(f"Intensity Mode ({i//modes},{i%modes})")
+            sub[i//modes,i%modes].set_title(f"Intensity Mode (o) ({i//modes},{i%modes})")
             sub[i//modes,i%modes].set_xlabel("$x(\\lambda)$")
             sub[i//modes,i%modes].set_ylabel("$y(\\lambda)$")
     plt.tight_layout()
@@ -238,6 +238,8 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
     plt.close("all")
+
+
     #%%
     """
     Reconstruction
@@ -271,7 +273,7 @@ if __name__ == "__main__":
                                        prop_params["pix_sizes"][0], 
                                        eps_a, 
                                        l)
-            U_diff = U_sim - Uo
+            U_diff = (U_sim - Uo) #4*(jnp.abs(U_sim)**2 - jnp.abs(Uo)**2) * (U_sim)
             U_diff_inv = FT2(jnp.conjugate(propagator) * iFT2(U_diff))
             U_sim_inv = FT2(jnp.conjugate(propagator) * iFT2(U_sim))
 

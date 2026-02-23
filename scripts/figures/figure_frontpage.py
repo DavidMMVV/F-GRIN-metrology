@@ -3,7 +3,7 @@ import skfmm # type: ignore
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
-from fgrinmet.constructions.zpol import z_poly
+from fgrinmet.constructions.ort_func import z_poly
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import os
 
