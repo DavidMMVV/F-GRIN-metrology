@@ -115,18 +115,6 @@ if __name__ == "__main__":
     ext_obj_zy = [z_o[0], z_o[-1], y_o[-1], y_o[0]]
     ext_obj_zx = [z_o[0], z_o[-1], x_o[0], x_o[-1]]
 
-    fig, sub = plt.subplots(1,3)
-    im1 = sub[0].imshow(eps_original[eps_original.shape[0]//2], extent=ext_obj_xy, aspect=1)
-    im2 = sub[1].imshow(eps_original[:,:,eps_original.shape[1]//2].T, extent=ext_obj_zy, aspect=0.005)
-    im3 = sub[2].imshow(eps_original[:,eps_original.shape[2]//2].T, extent=ext_obj_zx, aspect=0.005)
-    plt.colorbar(im1, ax=sub[0])
-    plt.colorbar(im2, ax=sub[1])
-    plt.colorbar(im3, ax=sub[2])
-    sub[0].set_title("Epsilon slice XY")
-    sub[1].set_title("Epsilon slice ZY")
-    sub[2].set_title("Epsilon slice ZX")
-    plt.tight_layout()
-
     # Definition of the input waves
     modes = 3
     wx, wy = (8*16*20 * l, 8*16*20 * l)
@@ -134,24 +122,6 @@ if __name__ == "__main__":
     Ui = jnp.array([G * hermite(i//modes)(jnp.sqrt(2)*y_p[:,None]/wy) * hermite(i%modes)(jnp.sqrt(2)*x_p[None]/wx) for i in range(modes**2)], dtype=jnp.complex128)
     Ui = Ui / Ui.max(axis=(1,2))[:,None, None]
     #Ui = jnp.ones(prop_params["shape"][1:], dtype=jnp.complex128)[None]
-
-    fig, sub = plt.subplots(modes,modes)
-    if Ui.shape[0] == 1:
-        im = sub.imshow(jnp.abs(Ui[0])**2, extent=ext_prop_xy)
-        plt.colorbar(im, ax=sub)
-        sub.set_title(f"Intensity Mode (0,0)")
-        sub.set_xlabel("$x(\\lambda)$")
-        sub.set_ylabel("$y(\\lambda)$")
-    else:
-        for i in range(Ui.shape[0]):
-            im = sub[i//modes,i%modes].imshow(jnp.abs(Ui[i])**2, extent=ext_prop_xy)
-            plt.colorbar(im, ax=sub[i//modes,i%modes])
-            sub[i//modes,i%modes].set_title(f"Intensity Mode ({i//modes},{i%modes})")
-            sub[i//modes,i%modes].set_xlabel("$x(\\lambda)$")
-            sub[i//modes,i%modes].set_ylabel("$y(\\lambda)$")
-    plt.tight_layout()
-    plt.show()
-    plt.close("all")
 
     # Preparation of the variables for propagation loop
     fx = jnp.fft.fftshift(jnp.fft.fftfreq(int(prop_params["shape"][2]), prop_params["pix_sizes"][2]))
@@ -190,54 +160,6 @@ if __name__ == "__main__":
                                      l)
     end = time.perf_counter()
     print(f"Propagation time JIT: {end - start} seconds")
-    
-    fig, sub = plt.subplots(modes,modes, sharex=True, sharey=True)
-    if Ui.shape[0] == 1:
-        im = sub.imshow(jnp.abs(Ui[0])**2, extent=ext_prop_xy)
-        plt.colorbar(im, ax=sub)
-        sub.set_title(f"Intensity Mode (i) (0,0)")
-        sub.set_xlabel("$x(\\lambda)$")
-        sub.set_ylabel("$y(\\lambda)$")
-    else:
-        for i in range(Ui.shape[0]):
-            im = sub[i//modes,i%modes].imshow(jnp.abs(Ui[i])**2, extent=ext_prop_xy)
-            plt.colorbar(im, ax=sub[i//modes,i%modes])
-            sub[i//modes,i%modes].set_title(f"Intensity Mode (i) ({i//modes},{i%modes})")
-            sub[i//modes,i%modes].set_xlabel("$x(\\lambda)$")
-            sub[i//modes,i%modes].set_ylabel("$y(\\lambda)$")
-    plt.tight_layout()
-
-    fig, sub = plt.subplots(modes,modes, sharex=True, sharey=True)
-    if Ui.shape[0] == 1:
-        im = sub.imshow(jnp.abs(Uo[0])**2, extent=ext_prop_xy)
-        plt.colorbar(im, ax=sub)
-        sub.set_title(f"Intensity Mode (o) (0,0)")
-        sub.set_xlabel("$x(\\lambda)$")
-        sub.set_ylabel("$y(\\lambda)$")
-    else:
-        for i in range(Uo.shape[0]):
-            im = sub[i//modes,i%modes].imshow(jnp.abs(Uo[i])**2, extent=ext_prop_xy)
-            plt.colorbar(im, ax=sub[i//modes,i%modes])
-            sub[i//modes,i%modes].set_title(f"Intensity Mode (o) ({i//modes},{i%modes})")
-            sub[i//modes,i%modes].set_xlabel("$x(\\lambda)$")
-            sub[i//modes,i%modes].set_ylabel("$y(\\lambda)$")
-    plt.tight_layout()
-
-    fig, sub = plt.subplots(modes,modes, sharex=True, sharey=True)
-    if Ui.shape[0] == 1:
-        sub.plot(z_p, energies[0])
-        sub.set_title(f"Energy Mode (0,0)")
-        sub.set_xlabel("$z(\\lambda)$")
-        sub.set_ylabel("Energy")
-    else:
-        for i in range(Uo.shape[0]):
-            im = sub[i//modes,i%modes].plot(z_p, energies[i])
-            sub[i//modes,i%modes].set_title(f"Energy Mode ({i//modes},{i%modes})")
-            sub[i//modes,i%modes].set_xlabel("$z(\\lambda)$")
-            sub[i//modes,i%modes].set_ylabel("Energy")
-    plt.tight_layout()
-    plt.show()
-    plt.close("all")
 
 
     #%%
@@ -250,7 +172,7 @@ if __name__ == "__main__":
     lr = 1e-2
     epsilon_tv = 1e-6
     alpha_tv = 1e-5
-    n_iterations = 500
+    n_iterations = 1000
     tau = 100
     optimizer = optax.adam(lr)
     opt_state = optimizer.init(guess)
@@ -303,14 +225,64 @@ if __name__ == "__main__":
 
             updates, opt_state = optimizer.update(grad_total, opt_state)
             guess = optax.apply_updates(guess, updates)
+            if epoch % 50 == 0:
+                guess = jnp.unwrap(guess, axis=(1), period=1.0)
+                guess = jnp.unwrap(guess, axis=(2), period=1.0)
             loss_mse = (jnp.abs(U_sim - Uo)**2).mean()
 
             seq_train.set_postfix({"Total loss": float(total_err), "MSE": float(mse_jax), "TV": float(tv_contrib)})
             losses.append([total_err, mse_jax, tv_contrib])
 
+            if epoch >= 2:
+                if (jnp.abs(losses[-2][1]-losses[-1][1]) / losses[-1][1]) <= 1e-4:
+                    break
+
         
         except KeyboardInterrupt:
             break
+
+    losses = jnp.array(losses).T
+
+    import json
+    from config import LOCAL_DATA_DIR
+
+    save_name = "{:03d}".format(2)
+
+    save_path = LOCAL_DATA_DIR / "splitm_grad_multimode" / "high_eps"
+    save_path.mkdir(parents=True, exist_ok=True)
+    params_path = (save_path / "params")
+    images_path = (save_path / "images")
+    params_path.mkdir(parents=True, exist_ok=True)
+    images_path.mkdir(parents=True, exist_ok=True)
+
+
+    prop_params = {
+        "shape": prop_shape.tolist(),
+        "pix_sizes": prop_pix_sizes.tolist(),
+        "center": prop_center.tolist()
+    }
+    object_params = {
+        "shape": obj_shape.tolist(),
+        "pix_sizes": obj_pix_sizes.tolist(),
+        "center": obj_center.tolist()
+    }
+    save_dict = {
+        "wavelength": l,
+        "prop_params": prop_params,
+        "object_params": object_params,
+        "eps_a": eps_a,
+        "lr": lr,
+        "epsilon_tv": epsilon_tv,
+        "alpha_tv": alpha_tv,
+        "tau": tau,
+        "modes": modes,
+        "losses": losses.tolist(),
+        "total_error": float(jnp.abs(guess - eps_original).mean())
+    }
+
+    with open(params_path / f"{save_name}.json", "w") as f:
+
+        json.dump(save_dict, f, indent=4)
 
     fig, sub = plt.subplots(1,3)
     im1 = sub[0].imshow(eps_original[eps_original.shape[0]//2], extent=ext_obj_xy, aspect=1)
@@ -319,9 +291,9 @@ if __name__ == "__main__":
     plt.colorbar(im1, ax=sub[0])
     plt.colorbar(im2, ax=sub[1])
     plt.colorbar(im3, ax=sub[2])
-    sub[0].set_title("Epsilon real slice XY")
-    sub[1].set_title("Epsilon real slice ZY")
-    sub[2].set_title("Epsilon real slice ZX")
+    sub[0].set_title("Epsilon original slice XY")
+    sub[1].set_title("Epsilon original slice ZY")
+    sub[2].set_title("Epsilon original slice ZX")
     sub[0].set_xlabel("$x(\\lambda)$")
     sub[0].set_ylabel("$y(\\lambda)$")
     sub[1].set_xlabel("$z(\\lambda)$")
@@ -329,6 +301,7 @@ if __name__ == "__main__":
     sub[2].set_xlabel("$z(\\lambda)$")
     sub[2].set_ylabel("$x(\\lambda)$")
     plt.tight_layout()
+    plt.savefig(images_path / f"{save_name}_original.jpg", dpi=300)
 
     fig, sub = plt.subplots(1,3)
     im1 = sub[0].imshow(guess[eps_original.shape[0]//2], extent=ext_obj_xy, aspect=1)
@@ -347,6 +320,7 @@ if __name__ == "__main__":
     sub[2].set_xlabel("$z(\\lambda)$")
     sub[2].set_ylabel("$x(\\lambda)$")
     plt.tight_layout()
+    plt.savefig(images_path / f"{save_name}_guess.jpg", dpi=300)
 
     fig, sub = plt.subplots(1,3)
     im1 = sub[0].imshow((eps_original-guess)[eps_original.shape[0]//2], extent=ext_obj_xy, aspect=1)
@@ -365,8 +339,8 @@ if __name__ == "__main__":
     sub[2].set_xlabel("$z(\\lambda)$")
     sub[2].set_ylabel("$x(\\lambda)$")
     plt.tight_layout()
+    plt.savefig(images_path / f"{save_name}_diff.jpg", dpi=300)
 
-    losses = jnp.array(losses).T
     labels = ["Total Loss", "MSE", "TV"]
     plt.figure()
     for i in range(3):
@@ -375,30 +349,43 @@ if __name__ == "__main__":
     plt.ylabel("Loss")
     plt.xlabel("Iteration")
     plt.legend()
+    plt.tight_layout()
+    plt.savefig(images_path / f"{save_name}_losses.jpg", dpi=300)
 
-    U_sim, energies = propagate_modes(guess, 
-                                     propagator, 
-                                     Ui, 
-                                     plane_rel, 
-                                     norm_vect_rel, 
-                                     int(prop_params["shape"][0]),
-                                     prop_params["pix_sizes"][0], 
-                                     eps_a, 
-                                     l)
-    
     fig, sub = plt.subplots(modes,modes, sharex=True, sharey=True)
     if Ui.shape[0] == 1:
         im = sub.imshow(jnp.abs(Uo[0]-U_sim[0])**2, extent=ext_prop_xy)
         plt.colorbar(im, ax=sub)
-        sub.set_title(f"Intensity difference Mode (0,0)")
+        sub.set_title(f"$I_{{\\text{{diff}}}}$ Mode (0,0)")
         sub.set_xlabel("$x(\\lambda)$")
         sub.set_ylabel("$y(\\lambda)$")
     else:
         for i in range(Ui.shape[0]):
             im = sub[i//modes,i%modes].imshow(jnp.abs(Uo[i]-U_sim[i])**2, extent=ext_prop_xy)
             plt.colorbar(im, ax=sub[i//modes,i%modes])
-            sub[i//modes,i%modes].set_title(f"Intensity difference Mode ({i//modes},{i%modes})")
+            sub[i//modes,i%modes].set_title(f"$I_{{\\text{{diff}}}}$ Mode ({i//modes},{i%modes})")
             sub[i//modes,i%modes].set_xlabel("$x(\\lambda)$")
             sub[i//modes,i%modes].set_ylabel("$y(\\lambda)$")
     plt.tight_layout()
+    plt.savefig(images_path / f"{save_name}_intensity_diff.jpg", dpi=300)
+
+    fig, sub = plt.subplots(modes,modes, sharex=True, sharey=True)
+    if Ui.shape[0] == 1:
+        im = sub.imshow(jnp.abs(Uo[0])**2, extent=ext_prop_xy)
+        plt.colorbar(im, ax=sub)
+        sub.set_title(f"$I$ Mode(0,0)")
+        sub.set_xlabel("$x(\\lambda)$")
+        sub.set_ylabel("$y(\\lambda)$")
+    else:
+        for i in range(Ui.shape[0]):
+            im = sub[i//modes,i%modes].imshow(jnp.abs(Uo[i])**2, extent=ext_prop_xy)
+            plt.colorbar(im, ax=sub[i//modes,i%modes])
+            sub[i//modes,i%modes].set_title(f"$I$ Mode ({i//modes},{i%modes})")
+            sub[i//modes,i%modes].set_xlabel("$x(\\lambda)$")
+            sub[i//modes,i%modes].set_ylabel("$y(\\lambda)$")
+    plt.tight_layout()
+    plt.savefig(images_path / f"{save_name}_intensity.jpg", dpi=300)
     plt.show()
+
+
+     

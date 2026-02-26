@@ -1,6 +1,7 @@
 import jax.numpy as jnp
 from scipy.special import legendre
 from scipy.special import factorial
+from typing import Tuple
 
 
 def rad_poly(m: int, 
@@ -53,21 +54,20 @@ def z_poly(coeficients: jnp.ndarray,
            pix_size: jnp.ndarray,
            radius: float) -> jnp.ndarray:
     """
-    This function computes the combination of the Zernike polynomials with their corresponding weights.
+    This function computes the Zernike polynomials with their corresponding weights.
 
     Args:
-        coeficients (dict[int, float]): Dictionary giving the number of the Zernike polynomial in OSA/ANSI
-        format with its corresponding weight.
-        H (int): Height of the image in pixels.
-        W (int): Width of the image in pixels.
+        coeficients (jnp.ndarray): Array giving the coeficients in order according to OSA/ANSI format.
+        shape (jnp.ndarray): Shape of the grid in pixels.
+        pix_size (jnp.ndarray): Size of the pixels in the grid in physical units.
+        radius (float): Radius of the circle in physical units.
 
     Returns:
-        Zpol (jnp.ndarray): The profile resulting from the parameters of the coefficients for different
-        Zernike polynomials. 
+        Zpol (jnp.ndarray): The correspondig zernike polynomials with their corresponding weights. 
     """
     
-    y = jnp.linspace(1, -1, shape[0]) 
-    x = jnp.linspace(-1, 1, shape[1])  
+    y = jnp.linspace(1, -1, int(shape[0]))
+    x = jnp.linspace(-1, 1, int(shape[1]))
     Y, X = jnp.meshgrid(y, x, indexing="ij")
     rad_y = radius * 2 / (shape[0]*pix_size[0])
     rad_x = radius * 2 / (shape[1]*pix_size[1])
@@ -86,28 +86,174 @@ def z_poly(coeficients: jnp.ndarray,
 
 def l_poly(
         coeficients: jnp.ndarray,
-        shape: jnp.ndarray
-):
-    pass
+        shape: int
+) -> jnp.ndarray:
+    """
+    Function whih returns all the legendre polynomials
+
+    Args:
+        coeficients (jnp.ndarray): Coeficients of the legendre polynomials in order.
+        shape (int): Number of pixels in the z direction.
+
+    Returns:
+        Lpoly(jnp.ndarray): The corresponding legendre polynomials with their corresponding weights. 
+    """
+    z = jnp.linspace(-1,1, shape)
+    Lpoly = jnp.array([coef * legendre(i)(z) for i, coef in enumerate(coeficients)])
+
+    return Lpoly
+
+def poly_exp(
+        coeficients: jnp.ndarray,
+        shape: jnp.ndarray,
+        pix_size: jnp.ndarray,
+        radius: float
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """
+    Function which gives the distributions of the orthogonal polynomials (Zernike and Legendre).
+
+    Args:   
+        coeficients (jnp.ndarray): Coeficients of the polynomials in order.
+        shape (jnp.ndarray): Shape of the grid in pixels.
+        pix_size (jnp.ndarray): Size of the pixels in the grid in physical units.
+        radius (float): Radius of the circle in physical units.
+    Returns:
+        Zpol (jnp.ndarray): The correspondig zernike polynomials with their corresponding weights. 
+        Lpol (jnp.ndarray): The corresponding legendre polynomials with their corresponding weights.
+    """
+
+    Zpol = z_poly(jnp.ones(coeficients.shape[0]), shape[1:], pix_size[1:], radius)
+    Lpol = l_poly(jnp.ones(coeficients.shape[1]), shape[0])
+    return Zpol, Lpol
     
+"""def poly_adj(
+        distribution: jnp.ndarray,
+        coeficients: jnp.ndarray,
+        pix_size: jnp.ndarray,
+        radius: float
+) -> jnp.ndarray:
+    shape = distribution.shape
+    coeficients_out = jnp.zeros_like(coeficients)
+
+    Zpol, Lpol = poly_exp(jnp.ones_like(coeficients), shape, pix_size, radius)
+
+    for i, slice in enumerate(distribution):
+        coeficients_out += (slice[None,None] * (Zpol[:, None] * Lpol[None, :, i, None, None])).sum(axis=(2,3))
+
+    return coeficients_out"""
+
+def poly_adj(
+        distribution: jnp.ndarray,
+        coeficients: jnp.ndarray,
+        pix_size: jnp.ndarray,
+        radius: float
+) -> jnp.ndarray:
+    """
+    Function which adjust a certain 3D distribution along othogonal polynomial basis.
+
+    Args:
+        distribution (jnp.ndarray): 3D distribution to be adjusted.
+        coeficients (jnp.ndarray): Coeficients of the polynomians along which to express the ditribution.
+        pix_size (jnp.ndarray): Size of the pixels in the grid in physical units.
+        radius (float): Radius of the circle in physical units.
+
+    Returns:
+        coeficients_out (jnp.ndarray): Output coeficients of the corresponding distribution.
+    """
+    
+    dist_shape = jnp.array(distribution.shape)
+    coef_shape = coeficients.shape
+
+    mask = (distribution != 0)
+    Zpol, Lpol = poly_exp(jnp.ones_like(coeficients), dist_shape, pix_size, radius)
+
+    y = distribution[mask]
+    M = jnp.zeros((y.shape[0],  coef_shape[0] * coef_shape[1]))
+    for i in range(coef_shape[0] * coef_shape[1]):
+        zer = Zpol[i//coef_shape[1]]
+        leg = Lpol[i%coef_shape[1]]
+        M = M.at[:,i].set((zer[None] * leg[:,None,None])[mask])
+    coeficients_out, _, _,_ = jnp.linalg.lstsq(M, y, rcond=None)
+
+    return coeficients_out.reshape(coef_shape)
+
+def poly_sum(coeficients: jnp.ndarray,
+             Zpol: jnp.ndarray,
+             Lpol: jnp.ndarray) -> jnp.ndarray:
+    """
+    This function returns the distribution given by the coeficients of each polynomial.
+
+    Args:
+        coeficients (jnp.ndarray): Coeficients of the polynomians.
+        Zpol (jnp.ndarray): Zernike polynomials.
+        Lpol (jnp.ndarray): Legendre polynomials.
+
+    Returns:
+        out (jnp.ndarray): The sum of the polynomials with the corresponding coeficients. 
+        The shape of the output is the same as the shape of the distribution to be adjusted.
+    """
+
+    out = jnp.zeros((Lpol.shape[1], Zpol.shape[1], Zpol.shape[2]))
+    for i in range(Lpol.shape[1]):
+        out = out.at[i].set((coeficients[:,:,None, None] * Lpol[None,:,i,None,None] * Zpol[:,None]).sum(axis=(0,1)))
+    return out
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    coeficients = jnp.ones(16)
-    shape = jnp.array([1024,1024])
-    pix_size = jnp.array([200 / shape[0], 200 / shape[0]])
-    extent = [-(pix_size[1]*(shape[1]//2)), (pix_size[1]*(1+shape[1]//2)), -(pix_size[0]*(shape[0]//2)), (pix_size[0]*(1+shape[0]//2))]
-    radius = 5
-    zernikes = z_poly(coeficients, shape, pix_size, radius)
-
-    z = jnp.linspace(-1,1,100)
-    print(legendre(3)(1))
+    from coordinates import coord_jax
+    coeficients = jnp.ones(16*6).reshape(16,6)
+    shape = jnp.array([128,128,128])
+    pix_size = jnp.array([200 / shape[0], 200 / shape[1], 200 / shape[2]])
+    extent = [-(pix_size[2]*(shape[2]//2)), (pix_size[2]*(1+shape[2]//2)), -(pix_size[1]*(shape[1]//2)), (pix_size[1]*(1+shape[1]//2))]
+    radius = 100
+    zernikes, leg = poly_exp(coeficients, shape, pix_size, radius)
+    z = jnp.linspace(-1,1,shape[0])
     
     fig, sub = plt.subplots(4,4, sharex=True, sharey=True)
     for i, dis in enumerate(zernikes):
-        #im = sub[i//4, i%4].imshow(dis, cmap="seismic", extent=extent)
-        im = sub[i//4, i%4].imshow((jnp.abs(jnp.fft.fftshift(jnp.fft.fft2(jnp.exp(2j*jnp.pi*dis)*(dis!=0))))), cmap="seismic", extent=extent)
+        im = sub[i//4, i%4].imshow(dis, cmap="seismic", extent=extent)
+        #im = sub[i//4, i%4].imshow((jnp.abs(jnp.fft.fftshift(jnp.fft.fft2(jnp.exp(2j*jnp.pi*dis)*(dis!=0))))), cmap="seismic", extent=extent)
         plt.colorbar(im, ax=sub[i//4, i%4])
         sub[i//4, i%4].set_title(f"$Z_{{{i}}}$")
     plt.tight_layout()
+
+    plt.figure()
+    for i, Lpoly in enumerate(leg):
+        plt.plot(z, Lpoly, label=f"$\\mathcal{{P}}_{{{i}}}$")
+    plt.legend()
+    plt.tight_layout()
+
+    Z,Y,X = jnp.meshgrid(*[
+        (jnp.arange(shape[0]) - shape[0] // 2) * pix_size[0],
+        (jnp.arange(shape[1]) - shape[1] // 2) * pix_size[1],
+        (jnp.arange(shape[2]) - shape[2] // 2) * pix_size[2]], indexing='ij')
+    
+    R = jnp.sqrt(X**2 + Y**2)
+    distribution = (1-(R/radius)**2) * (R<=radius)
+    ind_adj = poly_adj(distribution, jnp.ones((16,6)), pix_size, radius)
+
+    fig, sub = plt.subplots(1,3)
+    im1 = sub[0].imshow(distribution[shape[0]//2])
+    plt.colorbar(im1, ax=sub[0])
+    im2 = sub[1].imshow(distribution[:,shape[1]//2])
+    plt.colorbar(im2, ax=sub[1])
+    im3 = sub[2].imshow(distribution[:,:,shape[2]//2])
+    plt.colorbar(im3, ax=sub[2])
+    plt.tight_layout()
+
+    plt.figure()
+    plt.imshow(ind_adj, cmap="jet")
+    plt.colorbar()
+
+    rec = poly_sum(ind_adj, zernikes, leg)
+    fig, sub = plt.subplots(1,3)
+    im1 = sub[0].imshow(rec[shape[0]//2])
+    plt.colorbar(im1, ax=sub[0])
+    im2 = sub[1].imshow(rec[:,shape[1]//2])
+    plt.colorbar(im3, ax=sub[1])
+    im3 = sub[2].imshow(rec[:,:,shape[2]//2])
+    plt.colorbar(im3, ax=sub[2])
+    plt.tight_layout()
+
     plt.show()
+
