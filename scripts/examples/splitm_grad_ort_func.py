@@ -82,7 +82,7 @@ if __name__ == "__main__":
     l = 1
 
     # Definition of the propagation grid
-    prop_shape = jnp.array((16*16,8*128,8*128))
+    prop_shape = jnp.array((16,8*128,8*128))
     prop_pix_sizes = jnp.array(((l/4), 8*l, 8*l))
     prop_center = jnp.array(((prop_shape[0]//2)*prop_pix_sizes[0],
                              (prop_shape[1]//2)*prop_pix_sizes[1],
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     ext_prop_zx = [z_p[0], z_p[-1], x_p[0], x_p[-1]]
 
     # Definition of the object grid
-    obj_shape = jnp.array((16*16,128,128))
+    obj_shape = jnp.array((16,128,128))
     obj_pix_sizes = jnp.array((l/4, 8*8*l, 8*8*l))
     obj_center = jnp.array(((obj_shape[0]//2)*obj_pix_sizes[0],
                             (obj_shape[1]//2)*obj_pix_sizes[1],
@@ -261,24 +261,8 @@ if __name__ == "__main__":
     Z_poly, L_poly = poly_exp(jnp.ones(coef_shape), prop_params["shape"], prop_params["pix_sizes"], radius)
     real_coef = poly_adj(eps_original, jnp.ones(coef_shape), object_params["pix_sizes"], radius)
     real_dist = poly_sum(real_coef, *poly_exp(jnp.ones(coef_shape), object_params["shape"], object_params["pix_sizes"], radius))
-    
-    plt.figure()
-    plt.title("Coeficients real distribution")
-    plt.imshow(real_coef, extent=[0.5,coef_shape[1]+0.5, coef_shape[0]+0.5,0.5])
-    plt.ylabel("Zernike order")
-    plt.xlabel("Legendre order")
-    plt.colorbar()
 
-    fig, sub = plt.subplots(1,3)
-    im1 = sub[0].imshow(real_dist[object_params["shape"][0]//2], extent=ext_obj_xy)
-    im2 = sub[1].imshow(real_dist[:,:,object_params["shape"][1]//2].T, extent=ext_obj_zy, aspect=0.005)
-    im3 = sub[2].imshow(real_dist[:,object_params["shape"][2]//2].T, extent=ext_obj_zx, aspect=0.005)
-    plt.colorbar(im1, ax=sub[0])
-    plt.colorbar(im2, ax=sub[1])
-    plt.colorbar(im3, ax=sub[2])
-    plt.show()
-
-    coef_guess = real_coef.copy() # jnp.zeros(coef_shape)
+    coef_guess = jnp.zeros(coef_shape) # real_coef.copy()
     lr = 1e-2
     epsilon_tv = 1e-6
     alpha_tv = 1e-5
@@ -335,18 +319,82 @@ if __name__ == "__main__":
 
             mse_jax = (jnp.abs(U_diff)**2).mean()
 
-            total_err = mse_jax
+            total_err = float(mse_jax)
 
             updates, opt_state = optimizer.update(grad_total, opt_state)
             coef_guess = optax.apply_updates(coef_guess, updates)
             loss_mse = (jnp.abs(U_sim - Uo)**2).mean()
 
             seq_train.set_postfix({"Total loss": float(total_err)})
-            losses.append([total_err])
+            losses.append(total_err)
 
+            if epoch >= 2:
+                if (jnp.abs(losses[-2]-losses[-1]) / losses[-1]) <= 1e-4:
+                    break
         
         except KeyboardInterrupt:
             break
+
+    import json
+    from config import LOCAL_DATA_DIR
+
+    guess_dist = poly_sum(coef_guess, *poly_exp(jnp.ones(coef_shape), object_params["shape"], object_params["pix_sizes"], radius))
+
+
+    save_name = "{:03d}".format(1)
+
+    save_path = LOCAL_DATA_DIR / "splitm_grad_ort_func" / "GRIN_lens"
+    save_path.mkdir(parents=True, exist_ok=True)
+    params_path = (save_path / "params")
+    images_path = (save_path / "images")
+    params_path.mkdir(parents=True, exist_ok=True)
+    images_path.mkdir(parents=True, exist_ok=True)
+
+    prop_params = {
+        "shape": prop_shape.tolist(),
+        "pix_sizes": prop_pix_sizes.tolist(),
+        "center": prop_center.tolist()
+    }
+    object_params = {
+        "shape": obj_shape.tolist(),
+        "pix_sizes": obj_pix_sizes.tolist(),
+        "center": obj_center.tolist()
+    }
+    save_dict = {
+        "wavelength": l,
+        "prop_params": prop_params,
+        "object_params": object_params,
+        "eps_a": eps_a,
+        "lr": lr,
+        "epsilon_tv": epsilon_tv,
+        "alpha_tv": alpha_tv,
+        "tau": tau,
+        "modes": modes,
+        "losses": losses,
+        "total_error": float(jnp.abs(guess_dist - eps_original).mean()),
+        "guess": coef_guess.tolist()
+        }
+
+    with open(params_path / f"{save_name}.json", "w") as f:
+        json.dump(save_dict, f, indent=4)
+
+
+
+    plt.figure()
+    plt.title("Coeficients real distribution")
+    plt.imshow(real_coef, extent=[0.5,coef_shape[1]+0.5, coef_shape[0]+0.5,0.5])
+    plt.ylabel("Zernike order")
+    plt.xlabel("Legendre order")
+    plt.colorbar()
+    plt.savefig(images_path / f"{save_name}_original_coef.jpg", dpi=300)
+
+    plt.figure()
+    plt.title("Coeficients real distribution")
+    plt.imshow(coef_guess, extent=[0.5,coef_shape[1]+0.5, coef_shape[0]+0.5,0.5])
+    plt.ylabel("Zernike order")
+    plt.xlabel("Legendre order")
+    plt.colorbar()
+    plt.savefig(images_path / f"{save_name}_guess_coef.jpg", dpi=300)
 
     fig, sub = plt.subplots(1,3)
     im1 = sub[0].imshow(eps_original[eps_original.shape[0]//2], extent=ext_obj_xy, aspect=1)
@@ -355,9 +403,9 @@ if __name__ == "__main__":
     plt.colorbar(im1, ax=sub[0])
     plt.colorbar(im2, ax=sub[1])
     plt.colorbar(im3, ax=sub[2])
-    sub[0].set_title("Epsilon real slice XY")
-    sub[1].set_title("Epsilon real slice ZY")
-    sub[2].set_title("Epsilon real slice ZX")
+    sub[0].set_title("Eps original slice XY")
+    sub[1].set_title("Eps original slice ZY")
+    sub[2].set_title("Eps original slice ZX")
     sub[0].set_xlabel("$x(\\lambda)$")
     sub[0].set_ylabel("$y(\\lambda)$")
     sub[1].set_xlabel("$z(\\lambda)$")
@@ -365,8 +413,8 @@ if __name__ == "__main__":
     sub[2].set_xlabel("$z(\\lambda)$")
     sub[2].set_ylabel("$x(\\lambda)$")
     plt.tight_layout()
+    plt.savefig(images_path / f"{save_name}_original.jpg", dpi=300)
 
-    guess_dist = poly_sum(coef_guess, *poly_exp(jnp.ones(coef_shape), object_params["shape"], object_params["pix_sizes"], radius))
     fig, sub = plt.subplots(1,3)
     im1 = sub[0].imshow(guess_dist[object_params["shape"][0]//2], extent=ext_obj_xy)
     im2 = sub[1].imshow(guess_dist[:,:,object_params["shape"][1]//2].T, extent=ext_obj_zy, aspect=0.005)
@@ -374,44 +422,51 @@ if __name__ == "__main__":
     plt.colorbar(im1, ax=sub[0])
     plt.colorbar(im2, ax=sub[1])
     plt.colorbar(im3, ax=sub[2])
-    plt.show()
+    sub[0].set_title("Eps guess slice XY")
+    sub[1].set_title("Eps guess slice ZY")
+    sub[2].set_title("Eps guess slice ZX")
+    sub[0].set_xlabel("$x(\\lambda)$")
+    sub[0].set_ylabel("$y(\\lambda)$")
+    sub[1].set_xlabel("$z(\\lambda)$")
+    sub[1].set_ylabel("$y(\\lambda)$")
+    sub[2].set_xlabel("$z(\\lambda)$")
+    sub[2].set_ylabel("$x(\\lambda)$")
+    plt.tight_layout()
+    plt.savefig(images_path / f"{save_name}_guess.jpg", dpi=300)
 
     fig, sub = plt.subplots(1,3)
-    im1 = sub[0].imshow((guess_dist-eps_original)[object_params["shape"][0]//2], extent=ext_obj_xy)
-    im2 = sub[1].imshow((guess_dist-eps_original)[:,:,object_params["shape"][1]//2].T, extent=ext_obj_zy, aspect=0.005)
-    im3 = sub[2].imshow((guess_dist-eps_original)[:,object_params["shape"][2]//2].T, extent=ext_obj_zx, aspect=0.005)
+    im1 = sub[0].imshow((eps_original-guess_dist)[eps_original.shape[0]//2], extent=ext_obj_xy, aspect=1)
+    im2 = sub[1].imshow((eps_original-guess_dist)[:,:,eps_original.shape[1]//2].T, extent=ext_obj_zy, aspect=0.005)
+    im3 = sub[2].imshow((eps_original-guess_dist)[:,eps_original.shape[2]//2].T, extent=ext_obj_zx, aspect=0.005)
     plt.colorbar(im1, ax=sub[0])
     plt.colorbar(im2, ax=sub[1])
     plt.colorbar(im3, ax=sub[2])
-    sub[0].set_title("Epsilon error slice XY")
-    sub[1].set_title("Epsilon error slice ZY")
-    sub[2].set_title("Epsilon error slice ZX")
+    sub[0].set_title("Eps diff slice XY")
+    sub[1].set_title("Eps diff slice ZY")
+    sub[2].set_title("Eps diff slice ZX")
+    sub[0].set_xlabel("$x(\\lambda)$")
+    sub[0].set_ylabel("$y(\\lambda)$")
+    sub[1].set_xlabel("$z(\\lambda)$")
+    sub[1].set_ylabel("$y(\\lambda)$")
+    sub[2].set_xlabel("$z(\\lambda)$")
+    sub[2].set_ylabel("$x(\\lambda)$")
+    plt.tight_layout()
+    plt.savefig(images_path / f"{save_name}_diff.jpg", dpi=300)
 
     plt.figure()
-    plt.title("Coeficients guess distribution")
-    plt.imshow(coef_guess, extent=[0.5,coef_shape[1]+0.5, coef_shape[0]+0.5,0.5])
-    plt.ylabel("Zernike order")
-    plt.xlabel("Legendre order")
-    plt.colorbar()
-    plt.show()
-
-
-    losses = jnp.array(losses).T
-    labels = ["Total Loss"]
-    plt.figure()
-    for i in range(1):
-        plt.plot(losses[i], label=labels[i])
+    plt.plot(losses, label="MSE loss")
     plt.yscale("log")
     plt.ylabel("Loss")
     plt.xlabel("Iteration")
     plt.legend()
+    plt.tight_layout()
+    plt.savefig(images_path / f"{save_name}_losses.jpg", dpi=300)
 
     U_sim, _ = propagate_modes_poly(coef_guess,
                                     Z_poly,
                                     L_poly, 
                                     propagator, 
                                     Ui, 
-                                    #int(prop_params["shape"][0]),
                                     prop_params["pix_sizes"][0], 
                                     eps_a, 
                                     l)
@@ -420,15 +475,34 @@ if __name__ == "__main__":
     if Ui.shape[0] == 1:
         im = sub.imshow(jnp.abs(Uo[0]-U_sim[0])**2, extent=ext_prop_xy)
         plt.colorbar(im, ax=sub)
-        sub.set_title(f"Intensity difference Mode (0,0)")
+        sub.set_title(f"$I_{{\\text{{diff}}}}^{{(0,0)}}$")
         sub.set_xlabel("$x(\\lambda)$")
         sub.set_ylabel("$y(\\lambda)$")
     else:
         for i in range(Ui.shape[0]):
             im = sub[i//modes,i%modes].imshow(jnp.abs(Uo[i]-U_sim[i])**2, extent=ext_prop_xy)
             plt.colorbar(im, ax=sub[i//modes,i%modes])
-            sub[i//modes,i%modes].set_title(f"Intensity difference Mode ({i//modes},{i%modes})")
+            sub[i//modes,i%modes].set_title(f"$I_{{\\text{{diff}}}}^{{({i//modes},{i%modes})}}$")
             sub[i//modes,i%modes].set_xlabel("$x(\\lambda)$")
             sub[i//modes,i%modes].set_ylabel("$y(\\lambda)$")
     plt.tight_layout()
+    plt.savefig(images_path / f"{save_name}_intensity_diff.jpg", dpi=300)
+
+    fig, sub = plt.subplots(modes,modes, sharex=True, sharey=True)
+    if Ui.shape[0] == 1:
+        im = sub.imshow(jnp.abs(Uo[0])**2, extent=ext_prop_xy)
+        plt.colorbar(im, ax=sub)
+        sub.set_title(f"$I^{{(0,0)}}$")
+        sub.set_xlabel("$x(\\lambda)$")
+        sub.set_ylabel("$y(\\lambda)$")
+    else:
+        for i in range(Ui.shape[0]):
+            im = sub[i//modes,i%modes].imshow(jnp.abs(Uo[i])**2, extent=ext_prop_xy)
+            plt.colorbar(im, ax=sub[i//modes,i%modes])
+            sub[i//modes,i%modes].set_title(f"$I^{{({i//modes},{i%modes})}}$")
+            sub[i//modes,i%modes].set_xlabel("$x(\\lambda)$")
+            sub[i//modes,i%modes].set_ylabel("$y(\\lambda)$")
+    plt.tight_layout()
+    plt.savefig(images_path / f"{save_name}_intensity.jpg", dpi=300)
+
     plt.show()

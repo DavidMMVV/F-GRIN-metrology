@@ -22,6 +22,44 @@ def propagate_modes(
         dz: float,
         eps_a: float, 
         l: float
+    ) -> jnp.ndarray:
+    """Propagate multiple input modes through a slice of thickness dz with permittivity distribution eps_distr.
+
+    Args:
+        eps_distr (jnp.ndarray): Permittivity distribution of the slice.
+        propagator (jnp.ndarray): Precomputed propagator in Fourier space.
+        U_in (jnp.ndarray): Input modes to be propagated, shape (n_modes, H, W).
+        dz (float): Thickness of the slice.
+        eps_a (float): Ambient permittivity.
+        l (float): Wavelength.
+
+    Returns:
+        jnp.ndarray: Output modes after propagation, shape (n_modes, H, W).
+    """
+    def step(U_carry, index):
+        plane = plane_rel + norm_vect[None, None] * index
+        eps_plane = trilinear_interpolate(plane, eps_distr, outside = 0.0)
+
+        #U_mid = jnp.exp(1j * jnp.pi * eps_plane[index] * dz / (l * jnp.sqrt(eps_a))) * iFT2(propagator[None] * FT2(U_carry))
+        Uo = iFT2(propagator[None] * FT2(jnp.exp(1j * jnp.pi * eps_plane[None] * dz / (l * jnp.sqrt(eps_a))) * iFT2(propagator[None] * FT2(U_carry))))
+        energy = jnp.abs(U_carry).sum(axis=(-2,-1))
+        return Uo, energy
+
+    U_out, energies = jax.lax.scan(step, U_in, jnp.arange(nz))
+    energies = energies.transpose((1,0))
+    return U_out
+
+@partial(jax.jit, static_argnums=(5))
+def propagate_modes_energy(
+        eps_distr: jnp.ndarray, 
+        propagator: jnp.ndarray, 
+        U_in: jnp.ndarray, 
+        plane_rel: jnp.ndarray,
+        norm_vect: jnp.ndarray, 
+        nz: int,
+        dz: float,
+        eps_a: float, 
+        l: float
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Propagate multiple input modes through a slice of thickness dz with permittivity distribution eps_distr.
 
@@ -70,7 +108,7 @@ if __name__ == "__main__":
 
     # Definition of the propagation grid
     prop_shape = jnp.array((16,8*128,8*128))
-    prop_pix_sizes = jnp.array(((l/4), 8*l, 8*l))
+    prop_pix_sizes = jnp.array(((l/4), l/2, l/2))
     prop_center = jnp.array(((prop_shape[0]//2)*prop_pix_sizes[0],
                              (prop_shape[1]//2)*prop_pix_sizes[1],
                              (prop_shape[2]//2)*prop_pix_sizes[2]))
@@ -89,7 +127,7 @@ if __name__ == "__main__":
 
     # Definition of the object grid
     obj_shape = jnp.array((16,128,128))
-    obj_pix_sizes = jnp.array((l/4, 8*8*l, 8*8*l))
+    obj_pix_sizes = jnp.array((l/4, 8*l/2, 8*l/2))
     obj_center = jnp.array(((obj_shape[0]//2)*obj_pix_sizes[0],
                             (obj_shape[1]//2)*obj_pix_sizes[1],
                             (obj_shape[2]//2)*obj_pix_sizes[2]))
@@ -106,8 +144,8 @@ if __name__ == "__main__":
 
     n_a = 1.5
     r2 = (y_o[None,:,None]**2 + x_o[None,None]**2)*jnp.ones_like(z_o)[:,None,None]
-    R = 8*16*20 * l
-    n_original = n_a + (0.5*(1-(r2/R**2)) * (r2 <= (R**2)))
+    R = 8*20 * l
+    n_original = n_a + (0.1*(1-(r2/R**2))* (r2 <= (R**2))) # * ((z_o / jnp.abs(z_o).max())[:,None,None]) 
     eps_a =  n_a**2
     eps_original = n_original**2 - eps_a
 
@@ -116,12 +154,12 @@ if __name__ == "__main__":
     ext_obj_zx = [z_o[0], z_o[-1], x_o[0], x_o[-1]]
 
     # Definition of the input waves
-    modes = 3
-    wx, wy = (8*16*20 * l, 8*16*20 * l)
+    modes = 1
+    wx, wy = (8*20 * l, 8*20 * l)
     G = jnp.exp(-((x_p[None]/wx)**2 + (y_p[:,None]/wy)**2))
     Ui = jnp.array([G * hermite(i//modes)(jnp.sqrt(2)*y_p[:,None]/wy) * hermite(i%modes)(jnp.sqrt(2)*x_p[None]/wx) for i in range(modes**2)], dtype=jnp.complex128)
     Ui = Ui / Ui.max(axis=(1,2))[:,None, None]
-    #Ui = jnp.ones(prop_params["shape"][1:], dtype=jnp.complex128)[None]
+    Ui = jnp.ones(prop_params["shape"][1:], dtype=jnp.complex128)[None]
 
     # Preparation of the variables for propagation loop
     fx = jnp.fft.fftshift(jnp.fft.fftfreq(int(prop_params["shape"][2]), prop_params["pix_sizes"][2]))
@@ -149,7 +187,7 @@ if __name__ == "__main__":
                   propagator[None] * FT2(Uo))))
     
     start = time.perf_counter()
-    U_ro, energies = propagate_modes(eps_original, 
+    U_ro, energies = propagate_modes_energy(eps_original, 
                                      propagator, 
                                      Ui, 
                                      plane_rel, 
@@ -179,6 +217,7 @@ if __name__ == "__main__":
     
     seq_train = tqdm(range(n_iterations), desc="Training", leave=True)
     losses = []
+    error = []
 
     # Training loop
     for epoch in seq_train:
@@ -186,15 +225,15 @@ if __name__ == "__main__":
             grad = jnp.zeros_like(guess)
 
             # Forward propagation
-            U_sim, _ = propagate_modes(guess, 
-                                       propagator, 
-                                       Ui, 
-                                       plane_rel, 
-                                       norm_vect_rel, 
-                                       int(prop_params["shape"][0]),
-                                       prop_params["pix_sizes"][0], 
-                                       eps_a, 
-                                       l)
+            U_sim = propagate_modes(guess, 
+                                    propagator, 
+                                    Ui, 
+                                    plane_rel, 
+                                    norm_vect_rel, 
+                                    int(prop_params["shape"][0]),
+                                    prop_params["pix_sizes"][0], 
+                                    eps_a, 
+                                    l)
             U_diff = (U_sim - Uo) #4*(jnp.abs(U_sim)**2 - jnp.abs(Uo)**2) * (U_sim)
             U_diff_inv = FT2(jnp.conjugate(propagator) * iFT2(U_diff))
             U_sim_inv = FT2(jnp.conjugate(propagator) * iFT2(U_sim))
@@ -225,15 +264,16 @@ if __name__ == "__main__":
 
             updates, opt_state = optimizer.update(grad_total, opt_state)
             guess = optax.apply_updates(guess, updates)
-            if epoch % 50 == 0:
+            if epoch % 50 == 0 and False:
                 guess = jnp.unwrap(guess, axis=(1), period=1.0)
                 guess = jnp.unwrap(guess, axis=(2), period=1.0)
             loss_mse = (jnp.abs(U_sim - Uo)**2).mean()
 
             seq_train.set_postfix({"Total loss": float(total_err), "MSE": float(mse_jax), "TV": float(tv_contrib)})
             losses.append([total_err, mse_jax, tv_contrib])
+            error.append(float(jnp.abs(guess - eps_original).sum()))   
 
-            if epoch >= 2:
+            if epoch >= 100:
                 if (jnp.abs(losses[-2][1]-losses[-1][1]) / losses[-1][1]) <= 1e-4:
                     break
 
@@ -246,14 +286,16 @@ if __name__ == "__main__":
     import json
     from config import LOCAL_DATA_DIR
 
-    save_name = "{:03d}".format(2)
+    save_name = "{:03d}_plane".format(1)
+    is_save = False
 
-    save_path = LOCAL_DATA_DIR / "splitm_grad_multimode" / "high_eps"
-    save_path.mkdir(parents=True, exist_ok=True)
-    params_path = (save_path / "params")
-    images_path = (save_path / "images")
-    params_path.mkdir(parents=True, exist_ok=True)
-    images_path.mkdir(parents=True, exist_ok=True)
+    if is_save:
+        save_path = LOCAL_DATA_DIR / "splitm_grad_multimode" / "modes" # / f"xy_dims_modes_{modes**2}"
+        save_path.mkdir(parents=True, exist_ok=True)
+        params_path = (save_path / "params")
+        images_path = (save_path / "images")
+        params_path.mkdir(parents=True, exist_ok=True)
+        images_path.mkdir(parents=True, exist_ok=True)
 
 
     prop_params = {
@@ -275,25 +317,25 @@ if __name__ == "__main__":
         "epsilon_tv": epsilon_tv,
         "alpha_tv": alpha_tv,
         "tau": tau,
-        "modes": modes,
+        "modes": modes**2,
         "losses": losses.tolist(),
-        "total_error": float(jnp.abs(guess - eps_original).mean())
+        "total_error": error
     }
 
-    with open(params_path / f"{save_name}.json", "w") as f:
-
-        json.dump(save_dict, f, indent=4)
+    if is_save:
+        with open(params_path / f"{save_name}.json", "w") as f:
+            json.dump(save_dict, f, indent=4)
 
     fig, sub = plt.subplots(1,3)
     im1 = sub[0].imshow(eps_original[eps_original.shape[0]//2], extent=ext_obj_xy, aspect=1)
-    im2 = sub[1].imshow(eps_original[:,:,eps_original.shape[1]//2].T, extent=ext_obj_zy, aspect=0.005)
-    im3 = sub[2].imshow(eps_original[:,eps_original.shape[2]//2].T, extent=ext_obj_zx, aspect=0.005)
-    plt.colorbar(im1, ax=sub[0])
-    plt.colorbar(im2, ax=sub[1])
-    plt.colorbar(im3, ax=sub[2])
-    sub[0].set_title("Epsilon original slice XY")
-    sub[1].set_title("Epsilon original slice ZY")
-    sub[2].set_title("Epsilon original slice ZX")
+    im2 = sub[1].imshow(eps_original[:,:,eps_original.shape[1]//2].T, extent=ext_obj_zy, aspect=0.01)
+    im3 = sub[2].imshow(eps_original[:,eps_original.shape[2]//2].T, extent=ext_obj_zx, aspect=0.01)
+    plt.colorbar(im1, ax=sub[0], shrink=0.24)
+    plt.colorbar(im2, ax=sub[1], shrink=0.24)
+    plt.colorbar(im3, ax=sub[2], shrink=0.24)
+    sub[0].set_title("$\\Delta\\varepsilon_r^{real}$ XY")
+    sub[1].set_title("$\\Delta\\varepsilon_r^{real}$ ZY")
+    sub[2].set_title("$\\Delta\\varepsilon_r^{real}$ ZX")
     sub[0].set_xlabel("$x(\\lambda)$")
     sub[0].set_ylabel("$y(\\lambda)$")
     sub[1].set_xlabel("$z(\\lambda)$")
@@ -301,18 +343,19 @@ if __name__ == "__main__":
     sub[2].set_xlabel("$z(\\lambda)$")
     sub[2].set_ylabel("$x(\\lambda)$")
     plt.tight_layout()
-    plt.savefig(images_path / f"{save_name}_original.jpg", dpi=300)
+    if is_save:
+        plt.savefig(images_path / f"{save_name}_original.jpg", dpi=300)
 
     fig, sub = plt.subplots(1,3)
     im1 = sub[0].imshow(guess[eps_original.shape[0]//2], extent=ext_obj_xy, aspect=1)
-    im2 = sub[1].imshow(guess[:,:,eps_original.shape[1]//2].T, extent=ext_obj_zy, aspect=0.005)
-    im3 = sub[2].imshow(guess[:,eps_original.shape[2]//2].T, extent=ext_obj_zx, aspect=0.005)
-    plt.colorbar(im1, ax=sub[0])
-    plt.colorbar(im2, ax=sub[1])
-    plt.colorbar(im3, ax=sub[2])
-    sub[0].set_title("Epsilon guess slice XY")
-    sub[1].set_title("Epsilon guess slice ZY")
-    sub[2].set_title("Epsilon guess slice ZX")
+    im2 = sub[1].imshow(guess[:,:,eps_original.shape[1]//2].T, extent=ext_obj_zy, aspect=0.01)
+    im3 = sub[2].imshow(guess[:,eps_original.shape[2]//2].T, extent=ext_obj_zx, aspect=0.01)
+    plt.colorbar(im1, ax=sub[0], shrink=0.24)
+    plt.colorbar(im2, ax=sub[1], shrink=0.24)
+    plt.colorbar(im3, ax=sub[2], shrink=0.24)
+    sub[0].set_title("$\\Delta\\varepsilon_r^{guess}$ XY")
+    sub[1].set_title("$\\Delta\\varepsilon_r^{guess}$ ZY")
+    sub[2].set_title("$\\Delta\\varepsilon_r^{guess}$ ZX")
     sub[0].set_xlabel("$x(\\lambda)$")
     sub[0].set_ylabel("$y(\\lambda)$")
     sub[1].set_xlabel("$z(\\lambda)$")
@@ -320,18 +363,19 @@ if __name__ == "__main__":
     sub[2].set_xlabel("$z(\\lambda)$")
     sub[2].set_ylabel("$x(\\lambda)$")
     plt.tight_layout()
-    plt.savefig(images_path / f"{save_name}_guess.jpg", dpi=300)
+    if is_save:
+        plt.savefig(images_path / f"{save_name}_guess.jpg", dpi=300)
 
     fig, sub = plt.subplots(1,3)
     im1 = sub[0].imshow((eps_original-guess)[eps_original.shape[0]//2], extent=ext_obj_xy, aspect=1)
-    im2 = sub[1].imshow((eps_original-guess)[:,:,eps_original.shape[1]//2].T, extent=ext_obj_zy, aspect=0.005)
-    im3 = sub[2].imshow((eps_original-guess)[:,eps_original.shape[2]//2].T, extent=ext_obj_zx, aspect=0.005)
-    plt.colorbar(im1, ax=sub[0])
-    plt.colorbar(im2, ax=sub[1])
-    plt.colorbar(im3, ax=sub[2])
-    sub[0].set_title("Epsilon diff slice XY")
-    sub[1].set_title("Epsilon diff slice ZY")
-    sub[2].set_title("Epsilon diff slice ZX")
+    im2 = sub[1].imshow((eps_original-guess)[:,:,eps_original.shape[1]//2].T, extent=ext_obj_zy, aspect=0.01)
+    im3 = sub[2].imshow((eps_original-guess)[:,eps_original.shape[2]//2].T, extent=ext_obj_zx, aspect=0.01)
+    plt.colorbar(im1, ax=sub[0], shrink=0.24)
+    plt.colorbar(im2, ax=sub[1], shrink=0.24)
+    plt.colorbar(im3, ax=sub[2], shrink=0.24)
+    sub[0].set_title("$\\Delta\\varepsilon_r^{diff}$ XY")
+    sub[1].set_title("$\\Delta\\varepsilon_r^{diff}$ ZY")
+    sub[2].set_title("$\\Delta\\varepsilon_r^{diff}$ ZX")
     sub[0].set_xlabel("$x(\\lambda)$")
     sub[0].set_ylabel("$y(\\lambda)$")
     sub[1].set_xlabel("$z(\\lambda)$")
@@ -339,7 +383,8 @@ if __name__ == "__main__":
     sub[2].set_xlabel("$z(\\lambda)$")
     sub[2].set_ylabel("$x(\\lambda)$")
     plt.tight_layout()
-    plt.savefig(images_path / f"{save_name}_diff.jpg", dpi=300)
+    if is_save:
+        plt.savefig(images_path / f"{save_name}_diff.jpg", dpi=300)
 
     labels = ["Total Loss", "MSE", "TV"]
     plt.figure()
@@ -350,41 +395,44 @@ if __name__ == "__main__":
     plt.xlabel("Iteration")
     plt.legend()
     plt.tight_layout()
-    plt.savefig(images_path / f"{save_name}_losses.jpg", dpi=300)
+    if is_save:
+        plt.savefig(images_path / f"{save_name}_losses.jpg", dpi=300)
 
     fig, sub = plt.subplots(modes,modes, sharex=True, sharey=True)
     if Ui.shape[0] == 1:
         im = sub.imshow(jnp.abs(Uo[0]-U_sim[0])**2, extent=ext_prop_xy)
         plt.colorbar(im, ax=sub)
-        sub.set_title(f"$I_{{\\text{{diff}}}}$ Mode (0,0)")
+        sub.set_title(f"$I_{{\\text{{diff}}}}^{{(0,0)}}$")
         sub.set_xlabel("$x(\\lambda)$")
         sub.set_ylabel("$y(\\lambda)$")
     else:
         for i in range(Ui.shape[0]):
             im = sub[i//modes,i%modes].imshow(jnp.abs(Uo[i]-U_sim[i])**2, extent=ext_prop_xy)
             plt.colorbar(im, ax=sub[i//modes,i%modes])
-            sub[i//modes,i%modes].set_title(f"$I_{{\\text{{diff}}}}$ Mode ({i//modes},{i%modes})")
+            sub[i//modes,i%modes].set_title(f"$I_{{\\text{{diff}}}}^{{({i//modes},{i%modes})}}$")
             sub[i//modes,i%modes].set_xlabel("$x(\\lambda)$")
             sub[i//modes,i%modes].set_ylabel("$y(\\lambda)$")
     plt.tight_layout()
-    plt.savefig(images_path / f"{save_name}_intensity_diff.jpg", dpi=300)
+    if is_save:
+        plt.savefig(images_path / f"{save_name}_intensity_diff.jpg", dpi=300)
 
     fig, sub = plt.subplots(modes,modes, sharex=True, sharey=True)
     if Ui.shape[0] == 1:
         im = sub.imshow(jnp.abs(Uo[0])**2, extent=ext_prop_xy)
         plt.colorbar(im, ax=sub)
-        sub.set_title(f"$I$ Mode(0,0)")
+        sub.set_title(f"$I^{{(0,0)}}$")
         sub.set_xlabel("$x(\\lambda)$")
         sub.set_ylabel("$y(\\lambda)$")
     else:
         for i in range(Ui.shape[0]):
             im = sub[i//modes,i%modes].imshow(jnp.abs(Uo[i])**2, extent=ext_prop_xy)
             plt.colorbar(im, ax=sub[i//modes,i%modes])
-            sub[i//modes,i%modes].set_title(f"$I$ Mode ({i//modes},{i%modes})")
+            sub[i//modes,i%modes].set_title(f"$I^{{({i//modes},{i%modes})}}$")
             sub[i//modes,i%modes].set_xlabel("$x(\\lambda)$")
             sub[i//modes,i%modes].set_ylabel("$y(\\lambda)$")
     plt.tight_layout()
-    plt.savefig(images_path / f"{save_name}_intensity.jpg", dpi=300)
+    if is_save:
+        plt.savefig(images_path / f"{save_name}_intensity.jpg", dpi=300)
     plt.show()
 
 
