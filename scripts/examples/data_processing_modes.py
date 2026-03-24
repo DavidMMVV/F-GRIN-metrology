@@ -40,7 +40,7 @@ if __name__ == "__main__":
     plt.yscale("log")
     plt.xscale("log")
     plt.legend()
-    plt.savefig(savedir / "modes_losses.png", dpi=300)
+    plt.savefig(savedir / "modes_losses.jpg", dpi=300)
 
     plt.figure()
     for i in range(len(modes_z_params)):
@@ -50,7 +50,7 @@ if __name__ == "__main__":
     plt.yscale("log")
     plt.xscale("log")
     plt.legend()
-    plt.savefig(savedir / "modes_z_losses.png", dpi=300)
+    plt.savefig(savedir / "modes_z_losses.jpg", dpi=300)
 
     plt.figure()
     for i in range(len(modes_params)):
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     plt.yscale("log")
     plt.xscale("log")
     plt.legend()
-    plt.savefig(savedir / "modes_total_err.png", dpi=300)
+    plt.savefig(savedir / "modes_total_err.jpg", dpi=300)
 
     plt.figure()
     for i in range(len(modes_z_params)):
@@ -70,5 +70,5 @@ if __name__ == "__main__":
     plt.yscale("log")
     plt.xscale("log")
     plt.legend()
-    plt.savefig(savedir / "modes_z_total_err.png", dpi=300)
+    plt.savefig(savedir / "modes_z_total_err.jpg", dpi=300)
     plt.show()

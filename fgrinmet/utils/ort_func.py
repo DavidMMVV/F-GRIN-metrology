@@ -215,12 +215,18 @@ if __name__ == "__main__":
         #im = sub[i//4, i%4].imshow((jnp.abs(jnp.fft.fftshift(jnp.fft.fft2(jnp.exp(2j*jnp.pi*dis)*(dis!=0))))), cmap="seismic", extent=extent)
         plt.colorbar(im, ax=sub[i//4, i%4])
         sub[i//4, i%4].set_title(f"$Z_{{{i}}}$")
+        if i % 4 == 0:
+            sub[i//4, i%4].set_ylabel("y")
+        if i // 4 == 3:
+            sub[i//4, i%4].set_xlabel("x")
     plt.tight_layout()
 
     plt.figure()
     for i, Lpoly in enumerate(leg):
         plt.plot(z, Lpoly, label=f"$\\mathcal{{P}}_{{{i}}}$")
     plt.legend()
+    plt.xlabel("z")
+    plt.ylabel("P(z)")
     plt.tight_layout()
 
     Z,Y,X = jnp.meshgrid(*[
@@ -234,25 +240,34 @@ if __name__ == "__main__":
 
     fig, sub = plt.subplots(1,3)
     im1 = sub[0].imshow(distribution[shape[0]//2])
-    plt.colorbar(im1, ax=sub[0])
-    im2 = sub[1].imshow(distribution[:,shape[1]//2])
-    plt.colorbar(im2, ax=sub[1])
-    im3 = sub[2].imshow(distribution[:,:,shape[2]//2])
-    plt.colorbar(im3, ax=sub[2])
+    plt.colorbar(im1, ax=sub[0], shrink=0.23)
+    sub[0].set_xlabel("x")
+    sub[0].set_ylabel("y")
+    im2 = sub[1].imshow(distribution[:,shape[1]//2].T)
+    plt.colorbar(im2, ax=sub[1], shrink=0.23)
+    sub[1].set_xlabel("z")
+    sub[1].set_ylabel("x")
+
+    im3 = sub[2].imshow(distribution[:,:,shape[2]//2].T)
+    plt.colorbar(im3, ax=sub[2], shrink=0.23)
+    sub[2].set_xlabel("z")
+    sub[2].set_ylabel("y")
     plt.tight_layout()
 
     plt.figure()
     plt.imshow(ind_adj, cmap="jet")
     plt.colorbar()
+    plt.xlabel("Legendre order")
+    plt.ylabel("Zernike order")
 
     rec = poly_sum(ind_adj, zernikes, leg)
     fig, sub = plt.subplots(1,3)
     im1 = sub[0].imshow(rec[shape[0]//2])
-    plt.colorbar(im1, ax=sub[0])
+    plt.colorbar(im1, ax=sub[0], shrink=0.23)
     im2 = sub[1].imshow(rec[:,shape[1]//2])
-    plt.colorbar(im3, ax=sub[1])
+    plt.colorbar(im2, ax=sub[1], shrink=0.23)
     im3 = sub[2].imshow(rec[:,:,shape[2]//2])
-    plt.colorbar(im3, ax=sub[2])
+    plt.colorbar(im3, ax=sub[2], shrink=0.23)
     plt.tight_layout()
 
     plt.show()

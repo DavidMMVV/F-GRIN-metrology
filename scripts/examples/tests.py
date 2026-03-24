@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # ------------------------------
-# Definición del medio
+# Define the medium
 # ------------------------------
 
 def n_squared(r):
@@ -18,7 +18,7 @@ def grad_n_squared(r):
 
 
 # ------------------------------
-# Runge-Kutta 4 para ray tracing
+# Runge-Kutta 4 for ray tracing
 # ------------------------------
 
 def trace_ray(R0, T0, dt, steps):
@@ -43,21 +43,19 @@ def trace_ray(R0, T0, dt, steps):
     
     return np.array(trajectory)
 
-
-# ------------------------------
-# Condiciones iniciales
-# ------------------------------
+import jax.numpy as jnp
+modes = 1
+angles_ext = [-45, 45, -45, 45]
+y_angles, x_angles = jnp.meshgrid(jnp.linspace(angles_ext[0], angles_ext[1], modes), jnp.linspace(angles_ext[2], angles_ext[3], modes))
+angles = jnp.array((y_angles.flatten(), x_angles.flatten())).T
+print(angles)
 
 R0 = [0.2, 0.0, 0.0]
-T0 = [0.0, 0.0, 1.0]   # dirección inicial
+T0 = [0.0, 0.0, 1.0]   # initial direction
 dt = 0.05
 steps = 200
 
 traj = trace_ray(R0, T0, dt, steps)
-
-# ------------------------------
-# Graficar trayectoria
-# ------------------------------
 
 plt.plot(traj[:,2], traj[:,0])
 plt.xlabel("z")
